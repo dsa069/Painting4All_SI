@@ -122,41 +122,40 @@ public class Paint : MonoBehaviour
         #if ENABLE_INPUT_SYSTEM
         try
         {
-            Debug.Log("[PAINT] Buscando controladores XR en la jerarquía de la escena...");
+            Debug.Log("[PAINT] Buscando Hand/Controller Anchors XR en la jerarquía de la escena...");
             
-            // Search scene for controller GameObjects by name
+            // Search scene for controller GameObjects by exact name or pattern
             var allObjects = FindObjectsOfType<Transform>();
             foreach (var t in allObjects)
             {
-                if (t.name.Contains("Right") && (t.name.Contains("Controller") || t.name.Contains("Hand")))
+                string name = t.name;
+                // Look for: RightHandAnchor, RightControllerAnchor, or similar
+                if ((name == "RightHandAnchor" || name == "RightControllerAnchor" || 
+                     (name.Contains("Right") && (name.Contains("Controller") || name.Contains("Hand") || name.Contains("Anchor")))) &&
+                    !name.Contains("Detached"))
                 {
                     rightControllerTransform = t;
-                    Debug.Log("[PAINT] ✓ RIGHT Controller encontrado: " + t.name);
+                    Debug.Log("[PAINT] ✓ RIGHT Hand/Controller Anchor encontrado: " + t.name);
                 }
-                else if (t.name.Contains("Left") && (t.name.Contains("Controller") || t.name.Contains("Hand")))
+                else if ((name == "LeftHandAnchor" || name == "LeftControllerAnchor" || 
+                         (name.Contains("Left") && (name.Contains("Controller") || name.Contains("Hand") || name.Contains("Anchor")))) &&
+                        !name.Contains("Detached"))
                 {
                     leftControllerTransform = t;
-                    Debug.Log("[PAINT] ✓ LEFT Controller encontrado: " + t.name);
+                    Debug.Log("[PAINT] ✓ LEFT Hand/Controller Anchor encontrado: " + t.name);
                 }
             }
             
-            // If still not found, try to get from XR Origin
-            if (rightControllerTransform == null || leftControllerTransform == null)
-            {
-                var xrOrigin = FindObjectOfType<Transform>();
-                if (xrOrigin != null && (xrOrigin.name.Contains("XR Origin") || xrOrigin.name.Contains("XROrigin")))
-                {
-                    var rightChild = xrOrigin.Find("Right Controller");
-                    var leftChild = xrOrigin.Find("Left Controller");
-                    if (rightChild != null) rightControllerTransform = rightChild;
-                    if (leftChild != null) leftControllerTransform = leftChild;
-                    Debug.Log("[PAINT] Controladores encontrados bajo XR Origin");
-                }
-            }
+            if (rightControllerTransform != null)
+                Debug.Log("[PAINT] ✅ Usando RIGHT Anchor: " + rightControllerTransform.name + " [pos=" + rightControllerTransform.position + "]");
+            if (leftControllerTransform != null)
+                Debug.Log("[PAINT] ✅ Usando LEFT Anchor: " + leftControllerTransform.name + " [pos=" + leftControllerTransform.position + "]");
+            if (rightControllerTransform == null && leftControllerTransform == null)
+                Debug.LogWarning("[PAINT] ⚠️  No se encontraron Hand/Controller Anchors. Fallback a rayOrigin (si está asignado)");
         }
         catch (System.Exception ex)
         {
-            Debug.LogWarning("[PAINT] Error en auto-detección de controladores: " + ex.Message);
+            Debug.LogWarning("[PAINT] Error en auto-detección de Hand/Controller Anchors: " + ex.Message);
         }
         #endif
     }
@@ -204,7 +203,10 @@ public class Paint : MonoBehaviour
                 return;
             }
             Debug.Log("[PAINT] Raycast desde: " + activePointer.name + " pos=" + activePointer.position);
-            ray = new Ray(activePointer.position, activePointer.forward);
+            // IMPORTANTE: Usar la dirección inversa porque el controlador apunta "hacia atrás"
+            // en relación al lienzo (está en la mano del usuario mirando hacia adentro)
+            ray = new Ray(activePointer.position, -activePointer.forward);
+            Debug.Log("[PAINT] Ray direction invertida: " + (-activePointer.forward));
         }
 
         // Try sprite plane intersection first (so SpriteRenderer works without a MeshCollider)
@@ -349,30 +351,50 @@ public class Paint : MonoBehaviour
             }
 
             // Check HAND TRACKING (OpenXR Hand Devices) for painting with hand gestures
-            Debug.Log("[PAINT] Verificando hand tracking...");
+            Debug.Log("[PAINT] Verificando hand tracking... Total devices: " + InputSystem.devices.Count);
             foreach (var dev in InputSystem.devices)
             {
-                if (dev is UnityEngine.InputSystem.XR.XRController hand &&
-                    (hand.name.Contains("Hand") || hand.description.capabilities.Contains("Hand")))
+                Debug.Log("[PAINT] Device detectado: " + dev.name + " | Type: " + dev.GetType().Name);
+                
+                // Check if this is a hand device (by name or by being XRController)
+                bool isHand = dev.name.Contains("Hand") || dev.name.Contains("hand");
+                
+                if (dev is UnityEngine.InputSystem.XR.XRController xrDev)
                 {
-                    Debug.Log("[PAINT] Detectada MANO: " + hand.name);
+                    Debug.Log("[PAINT]   → Es XRController. Name='" + xrDev.name + "' | description.product='" + xrDev.description.product + "'");
                     
-                    // Try hand-specific controls for pinch/select gesture
-                    var select = hand.TryGetChildControl<AxisControl>("select");
-                    if (select != null && select.ReadValue() > 0.5f)
+                    // In Oculus/Meta, hand tracking shows as XRController with specific names
+                    if (isHand)
                     {
-                        Debug.Log("[PAINT] ✓ PINCH detectado con MANO - painting=true");
-                        painting = true;
-                        break;
-                    }
-                    
-                    // Fallback: check trigger on hand (some platforms map it)
-                    var trigger = hand.TryGetChildControl<AxisControl>("trigger");
-                    if (trigger != null && trigger.ReadValue() > 0.1f)
-                    {
-                        Debug.Log("[PAINT] ✓ TRIGGER detectado en MANO - painting=true");
-                        painting = true;
-                        break;
+                        Debug.Log("[PAINT]   ✓ Detectada MANO: " + xrDev.name);
+                        
+                        // Try multiple possible control names for pinch/select
+                        float bestValue = 0f;
+                        string[] controlNames = { "select", "trigger", "grip", "pinch" };
+                        
+                        foreach (var controlName in controlNames)
+                        {
+                            try
+                            {
+                                var ctrl = xrDev.TryGetChildControl<AxisControl>(controlName);
+                                if (ctrl != null)
+                                {
+                                    float val = ctrl.ReadValue();
+                                    Debug.Log("[PAINT]     → Control '" + controlName + "' = " + val.ToString("F3"));
+                                    bestValue = Mathf.Max(bestValue, val);
+                                }
+                            }
+                            catch { }
+                        }
+                        
+                        // PINCH threshold: typically 0.5+ for "fully pinched"
+                        // Lower it to 0.3 to detect even light pinches
+                        if (bestValue > 0.3f)
+                        {
+                            Debug.Log("[PAINT] ✓ PINCH detectado en MANO (value=" + bestValue.ToString("F3") + ") - painting=true");
+                            painting = true;
+                            break;
+                        }
                     }
                 }
             }
