@@ -28,6 +28,11 @@ public class Paint : MonoBehaviour
     Texture2D previewTex;
     Texture2D sourceTex;
 
+    // trigger logging helpers
+    float lastTriggerValue = -1f;
+    float lastTriggerLogTime = 0f;
+    const float triggerLogInterval = 2.0f; // seconds (reduced frequency)
+
     int lastPx = -1, lastPy = -1;
 
     void Start()
@@ -51,8 +56,10 @@ public class Paint : MonoBehaviour
             }
             runtimeTex = CreateWritableTexture(sourceTex);
             runtimeTex.name = sourceTex.name + " (runtime)";
-            spriteRenderer.material = new Material(spriteRenderer.sharedMaterial);
-            spriteRenderer.material.mainTexture = runtimeTex;
+            // Use a known sprite shader to ensure we can swap textures at runtime
+            var spriteMat = new Material(Shader.Find("Sprites/Default"));
+            spriteMat.mainTexture = runtimeTex;
+            spriteRenderer.material = spriteMat;
             previewTex = new Texture2D(runtimeTex.width, runtimeTex.height, TextureFormat.RGBA32, false);
             try { previewTex.SetPixels(runtimeTex.GetPixels()); }
             catch { Graphics.CopyTexture(runtimeTex, previewTex); }
@@ -110,6 +117,7 @@ public class Paint : MonoBehaviour
     void Update()
     {
         if (runtimeTex == null) return;
+        Debug.Log("[PAINT] Update() ejecutándose");
 
         Ray ray;
         if (useMouseForEditor && Application.isEditor)
@@ -130,7 +138,12 @@ public class Paint : MonoBehaviour
         }
         else
         {
-            if (rayOrigin == null) return;
+            if (rayOrigin == null) 
+            {
+                Debug.LogWarning("[PAINT] rayOrigin es NULL - no se puede hacer raycast en VR");
+                return;
+            }
+            Debug.Log("[PAINT] Usando rayOrigin: " + rayOrigin.name + " pos=" + rayOrigin.position);
             ray = new Ray(rayOrigin.position, rayOrigin.forward);
         }
 
@@ -140,12 +153,38 @@ public class Paint : MonoBehaviour
 
         if (spriteRenderer != null)
         {
-            Plane plane = new Plane(spriteRenderer.transform.forward, spriteRenderer.transform.position);
-            if (plane.Raycast(ray, out float enter))
+            // Manual intersection with sprite plane + extra diagnostics
+            Vector3 planeNormal = spriteRenderer.transform.forward;
+            Vector3 planePoint = spriteRenderer.transform.position;
+            float denom = Vector3.Dot(planeNormal, ray.direction);
+            Debug.Log("[PAINT] Ray origin=" + ray.origin + " dir=" + ray.direction + " planeNormal=" + planeNormal + " denom=" + denom);
+            if (Mathf.Abs(denom) > 1e-6f)
             {
-                Vector3 worldPoint = ray.GetPoint(enter);
-                uv = ComputeUVForSprite(worldPoint);
-                haveHit = true;
+                float t = Vector3.Dot(planeNormal, planePoint - ray.origin) / denom;
+                if (t >= 0f)
+                {
+                    Vector3 worldPoint = ray.GetPoint(t);
+                    Vector2 uvCandidate = ComputeUVForSprite(worldPoint);
+                    // only accept hits inside the sprite rect (0..1 UV)
+                    if (uvCandidate.x >= 0f && uvCandidate.x <= 1f && uvCandidate.y >= 0f && uvCandidate.y <= 1f)
+                    {
+                        uv = uvCandidate;
+                        haveHit = true;
+                        Debug.Log("[PAINT] ✓ Ray intersectó plano del sprite (manual) - UV: " + uv);
+                    }
+                    else
+                    {
+                        Debug.Log("[PAINT] Ray intersectó el plano pero fuera del rect del sprite - UV candidate: " + uvCandidate);
+                    }
+                }
+                else
+                {
+                    Debug.Log("[PAINT] Ray intersection detrás del origen (t=" + t + ")");
+                }
+            }
+            else
+            {
+                Debug.Log("[PAINT] Ray paralelo al plano del sprite (denom=" + denom + ")");
             }
         }
 
@@ -170,6 +209,7 @@ public class Paint : MonoBehaviour
             {
                 if (px != lastPx || py != lastPy)
                 {
+                    Debug.Log("[PAINT] Actualizar preview en píxel (" + px + ", " + py + ")");
                     UpdatePreview(px, py);
                     lastPx = px; lastPy = py;
                 }
@@ -180,37 +220,79 @@ public class Paint : MonoBehaviour
             }
 
             bool painting = false;
+            Debug.Log("[PAINT] Buscando input...");
 #if ENABLE_LEGACY_INPUT_MANAGER
+            Debug.Log("[PAINT] Usando LEGACY INPUT MANAGER");
             painting = Input.GetMouseButton(0) || Input.GetButton("Fire1") || Input.GetKey(paintKey);
 #elif ENABLE_INPUT_SYSTEM
+            Debug.Log("[PAINT] Usando INPUT SYSTEM");
             var m2 = Mouse.current;
-            if (m2 != null && m2.leftButton.isPressed) painting = true;
+            if (m2 != null && m2.leftButton.isPressed) 
+            {
+                Debug.Log("[PAINT] Mouse izquierdo detectado");
+                painting = true;
+            }
             var gp = Gamepad.current;
-            if (!painting && gp != null && gp.buttonSouth.isPressed) painting = true;
+            if (!painting && gp != null && gp.buttonSouth.isPressed) 
+            {
+                Debug.Log("[PAINT] Gamepad button south detectado");
+                painting = true;
+            }
 
             // Check XR controllers (Input System)
+            Debug.Log("[PAINT] Buscando XR controllers... Count=" + InputSystem.devices.Count);
             foreach (var dev in InputSystem.devices)
             {
                 if (dev is UnityEngine.InputSystem.XR.XRController xr)
                 {
+                    Debug.Log("[PAINT] Encontrado XRController: " + xr.name);
                     var trigger = xr.TryGetChildControl<AxisControl>("trigger");
-                    if (trigger != null && trigger.ReadValue() > 0.5f)
+                    if (trigger != null)
                     {
-                        painting = true;
-                        break;
+                        float triggerValue = trigger.ReadValue();
+                        // Only log frequently (every triggerLogInterval) or when value changes noticeably
+                        if (Mathf.Abs(triggerValue - lastTriggerValue) > 0.01f || Time.realtimeSinceStartup - lastTriggerLogTime > triggerLogInterval)
+                        {
+                            lastTriggerLogTime = Time.realtimeSinceStartup;
+                            Debug.Log("[PAINT][" + Time.realtimeSinceStartup.ToString("F2") + "] Trigger Value: " + triggerValue + " (threshold: 0.1)");
+                            lastTriggerValue = triggerValue;
+                        }
+                        if (triggerValue > 0.1f)  // LOWERED to 0.1 for testing
+                        {
+                            Debug.Log("[PAINT] ✓ Trigger XR detectado (AxisControl) - painting=true");
+                            painting = true;
+                            break;
+                        }
                     }
-                    // some controllers expose "trigger" as a ButtonControl
-                    var triggerBtn = xr.TryGetChildControl<ButtonControl>("trigger");
-                    if (triggerBtn != null && triggerBtn.isPressed)
+                    else
                     {
-                        painting = true;
-                        break;
+                        Debug.LogWarning("[PAINT] Trigger AxisControl es NULL");
+                    }
+                    
+                    // some controllers expose "trigger" as a ButtonControl
+                    try
+                    {
+                        var triggerBtn = xr.TryGetChildControl<ButtonControl>("trigger");
+                        if (triggerBtn != null && triggerBtn.isPressed)
+                        {
+                            Debug.Log("[PAINT] ✓ Trigger XR detectado (ButtonControl) - painting=true");
+                            painting = true;
+                            break;
+                        }
+                    }
+                    catch (System.InvalidOperationException)
+                    {
+                        // Control type mismatch - ignore and continue
+                        // This happens when trigger is AxisControl but not ButtonControl
                     }
                 }
             }
+#else
+            Debug.Log("[PAINT] ¡NINGÚN INPUT SYSTEM DISPONIBLE!");
 #endif
             if (painting)
             {
+                Debug.Log("[PAINT] Dibujando círculo en píxel (" + px + ", " + py + ")");
                 DrawCircle(runtimeTex, px, py, brushSize, brushColor);
                 runtimeTex.Apply();
                 // keep preview in sync
@@ -230,6 +312,7 @@ public class Paint : MonoBehaviour
 
     void UpdatePreview(int px, int py)
     {
+        Debug.Log("[PAINT] UpdatePreview() llamado con px=" + px + ", py=" + py);
         // copy runtime into preview then draw
         try
         {
@@ -243,7 +326,33 @@ public class Paint : MonoBehaviour
 
         DrawCircle(previewTex, px, py, brushSize, brushColor);
         previewTex.Apply();
+        // give the preview texture a name so logs are informative
+        try { previewTex.name = (runtimeTex != null ? runtimeTex.name + " (preview)" : "previewTex"); } catch {}
+        Debug.Log("[PAINT] Preview dibujado y aplicado a material");
         SetMaterialTexture(previewTex);
+
+        // For SpriteRenderer, assigning the texture to the material may not display
+        // the full texture if the sprite uses a sub-rect (atlas). Create a Sprite
+        // from the preview texture and assign it to the SpriteRenderer as a fallback
+        // so the preview is guaranteed to be visible.
+        if (spriteRenderer != null && previewTex != null)
+        {
+            var orig = spriteRenderer.sprite;
+            if (orig != null)
+            {
+                Rect fullRect = new Rect(0, 0, previewTex.width, previewTex.height);
+                Vector2 pivotNorm = new Vector2(0.5f, 0.5f);
+                try
+                {
+                    pivotNorm = new Vector2(orig.pivot.x / orig.rect.width, orig.pivot.y / orig.rect.height);
+                }
+                catch {}
+                var newSprite = Sprite.Create(previewTex, fullRect, pivotNorm, orig.pixelsPerUnit);
+                try { newSprite.name = orig.name + " (previewSprite)"; } catch {}
+                spriteRenderer.sprite = newSprite;
+                Debug.Log("[PAINT] Assigned preview Sprite to SpriteRenderer: " + newSprite.name);
+            }
+        }
     }
 
     void ApplyRuntimeTextureToMaterial()
@@ -253,9 +362,21 @@ public class Paint : MonoBehaviour
 
     void SetMaterialTexture(Texture2D tex)
     {
-        if (rend != null) rend.material.mainTexture = tex;
-        else if (spriteRenderer != null) spriteRenderer.material.mainTexture = tex;
-        else if (uiImage != null) uiImage.material.mainTexture = tex;
+        if (rend != null)
+        {
+            rend.material.mainTexture = tex;
+            Debug.Log("[PAINT] Set material texture on Renderer: " + tex.name);
+        }
+        else if (spriteRenderer != null)
+        {
+            spriteRenderer.material.mainTexture = tex;
+            Debug.Log("[PAINT] Set material texture on SpriteRenderer: " + tex.name);
+        }
+        else if (uiImage != null)
+        {
+            uiImage.material.mainTexture = tex;
+            Debug.Log("[PAINT] Set material texture on UI Image: " + tex.name);
+        }
     }
 
     Vector2 ComputeUVFromHit(RaycastHit hit)
