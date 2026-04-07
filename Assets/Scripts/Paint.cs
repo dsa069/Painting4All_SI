@@ -14,6 +14,10 @@ public class Paint : MonoBehaviour
     public Transform rayOrigin;
     public bool useMouseForEditor = true;
     public KeyCode paintKey = KeyCode.JoystickButton0;
+    
+    // Auto-detected VR controller transforms (prioritize these over rayOrigin)
+    private Transform rightControllerTransform;
+    private Transform leftControllerTransform;
 
     [Header("Brush")]
     public int brushSize = 16;
@@ -39,7 +43,7 @@ public class Paint : MonoBehaviour
     {
         // prefer SpriteRenderer and UI Image over generic Renderer, because SpriteRenderer also returns a Renderer
         spriteRenderer = GetComponent<SpriteRenderer>();
-        uiImage = GetComponent<Image>();
+        uiImage = GetComponent<Image>(); 
         rend = GetComponent<Renderer>();
 
         if (spriteRenderer != null)
@@ -112,6 +116,49 @@ public class Paint : MonoBehaviour
         {
             Debug.LogError("Paint: No Renderer, SpriteRenderer or UI Image found on the GameObject.");
         }
+        
+        // Auto-detect XR controller transforms for VR painting (prioritize controllers over rayOrigin)
+        // Search scene hierarchy for Right and Left controller GameObjects
+        #if ENABLE_INPUT_SYSTEM
+        try
+        {
+            Debug.Log("[PAINT] Buscando controladores XR en la jerarquía de la escena...");
+            
+            // Search scene for controller GameObjects by name
+            var allObjects = FindObjectsOfType<Transform>();
+            foreach (var t in allObjects)
+            {
+                if (t.name.Contains("Right") && (t.name.Contains("Controller") || t.name.Contains("Hand")))
+                {
+                    rightControllerTransform = t;
+                    Debug.Log("[PAINT] ✓ RIGHT Controller encontrado: " + t.name);
+                }
+                else if (t.name.Contains("Left") && (t.name.Contains("Controller") || t.name.Contains("Hand")))
+                {
+                    leftControllerTransform = t;
+                    Debug.Log("[PAINT] ✓ LEFT Controller encontrado: " + t.name);
+                }
+            }
+            
+            // If still not found, try to get from XR Origin
+            if (rightControllerTransform == null || leftControllerTransform == null)
+            {
+                var xrOrigin = FindObjectOfType<Transform>();
+                if (xrOrigin != null && (xrOrigin.name.Contains("XR Origin") || xrOrigin.name.Contains("XROrigin")))
+                {
+                    var rightChild = xrOrigin.Find("Right Controller");
+                    var leftChild = xrOrigin.Find("Left Controller");
+                    if (rightChild != null) rightControllerTransform = rightChild;
+                    if (leftChild != null) leftControllerTransform = leftChild;
+                    Debug.Log("[PAINT] Controladores encontrados bajo XR Origin");
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("[PAINT] Error en auto-detección de controladores: " + ex.Message);
+        }
+        #endif
     }
 
     void Update()
@@ -120,6 +167,19 @@ public class Paint : MonoBehaviour
         Debug.Log("[PAINT] Update() ejecutándose");
 
         Ray ray;
+        // PRIORITY: Use detected RIGHT controller > LEFT controller > assigned rayOrigin
+        Transform activePointer = rayOrigin;
+        if (rightControllerTransform != null)
+        {
+            activePointer = rightControllerTransform;
+            Debug.Log("[PAINT] Raycast desde RIGHT Controller (mando), NO cámara");
+        }
+        else if (leftControllerTransform != null)
+        {
+            activePointer = leftControllerTransform;
+            Debug.Log("[PAINT] Raycast desde LEFT Controller (mando), NO cámara");
+        }
+        
         if (useMouseForEditor && Application.isEditor)
         {
             if (Camera.main == null) return;
@@ -138,13 +198,13 @@ public class Paint : MonoBehaviour
         }
         else
         {
-            if (rayOrigin == null) 
+            if (activePointer == null) 
             {
-                Debug.LogWarning("[PAINT] rayOrigin es NULL - no se puede hacer raycast en VR");
+                Debug.LogWarning("[PAINT] activePointer es NULL - no se puede hacer raycast en VR");
                 return;
             }
-            Debug.Log("[PAINT] Usando rayOrigin: " + rayOrigin.name + " pos=" + rayOrigin.position);
-            ray = new Ray(rayOrigin.position, rayOrigin.forward);
+            Debug.Log("[PAINT] Raycast desde: " + activePointer.name + " pos=" + activePointer.position);
+            ray = new Ray(activePointer.position, activePointer.forward);
         }
 
         // Try sprite plane intersection first (so SpriteRenderer works without a MeshCollider)
@@ -287,6 +347,35 @@ public class Paint : MonoBehaviour
                     }
                 }
             }
+
+            // Check HAND TRACKING (OpenXR Hand Devices) for painting with hand gestures
+            Debug.Log("[PAINT] Verificando hand tracking...");
+            foreach (var dev in InputSystem.devices)
+            {
+                if (dev is UnityEngine.InputSystem.XR.XRController hand &&
+                    (hand.name.Contains("Hand") || hand.description.capabilities.Contains("Hand")))
+                {
+                    Debug.Log("[PAINT] Detectada MANO: " + hand.name);
+                    
+                    // Try hand-specific controls for pinch/select gesture
+                    var select = hand.TryGetChildControl<AxisControl>("select");
+                    if (select != null && select.ReadValue() > 0.5f)
+                    {
+                        Debug.Log("[PAINT] ✓ PINCH detectado con MANO - painting=true");
+                        painting = true;
+                        break;
+                    }
+                    
+                    // Fallback: check trigger on hand (some platforms map it)
+                    var trigger = hand.TryGetChildControl<AxisControl>("trigger");
+                    if (trigger != null && trigger.ReadValue() > 0.1f)
+                    {
+                        Debug.Log("[PAINT] ✓ TRIGGER detectado en MANO - painting=true");
+                        painting = true;
+                        break;
+                    }
+                }
+            }
 #else
             Debug.Log("[PAINT] ¡NINGÚN INPUT SYSTEM DISPONIBLE!");
 #endif
@@ -324,7 +413,9 @@ public class Paint : MonoBehaviour
             previewTex.SetPixels(runtimeTex.GetPixels());
         }
 
-        DrawCircle(previewTex, px, py, brushSize, brushColor);
+        // Use bright WHITE color for preview circle so it's clearly visible before painting
+        Color previewColor = Color.white;
+        DrawCircle(previewTex, px, py, brushSize, previewColor);
         previewTex.Apply();
         // give the preview texture a name so logs are informative
         try { previewTex.name = (runtimeTex != null ? runtimeTex.name + " (preview)" : "previewTex"); } catch {}

@@ -13926,7 +13926,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e21139218aeaeb45a7025bd019a2b5a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Paint
-  rayOrigin: {fileID: 911044981}
+  rayOrigin: {fileID: 0}
   useMouseForEditor: 1
   paintKey: 330
   brushSize: 16
