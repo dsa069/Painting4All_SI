@@ -216,10 +216,12 @@ public class Paint : MonoBehaviour
                 return;
             }
             Debug.Log($"[PAINT] Raycast desde: {activePointer.name} pos={activePointer.position} (fuente: {pointerSource})");
-            // IMPORTANTE: Usar la dirección inversa porque el controlador apunta "hacia atrás"
-            // en relación al lienzo (está en la mano del usuario mirando hacia adentro)
-            ray = new Ray(activePointer.position, -activePointer.forward);
-            Debug.Log("[PAINT] Ray direction invertida: " + (-activePointer.forward));
+            
+            // Usar la orientación del controlador: forward direction
+            // Este es el vector que apunta en la dirección que está mirando/apuntando el controlador
+            Vector3 rayDirection = activePointer.forward;
+            ray = new Ray(activePointer.position, rayDirection);
+            Debug.Log($"[PAINT] Ray direction (forward del controlador): {rayDirection}");
         //}
 
         // Try sprite plane intersection first (so SpriteRenderer works without a MeshCollider)
@@ -228,38 +230,41 @@ public class Paint : MonoBehaviour
 
         if (spriteRenderer != null)
         {
-            // Manual intersection with sprite plane + extra diagnostics
+            // Intersección manual con el plano del sprite
             Vector3 planeNormal = spriteRenderer.transform.forward;
             Vector3 planePoint = spriteRenderer.transform.position;
             float denom = Vector3.Dot(planeNormal, ray.direction);
-            Debug.Log("[PAINT] Ray origin=" + ray.origin + " dir=" + ray.direction + " planeNormal=" + planeNormal + " denom=" + denom);
+            Debug.Log($"[PAINT] Ray origin={ray.origin} dir={ray.direction} planeNormal={planeNormal} denom={denom}");
             if (Mathf.Abs(denom) > 1e-6f)
             {
                 float t = Vector3.Dot(planeNormal, planePoint - ray.origin) / denom;
+                Debug.Log($"[PAINT] [DIAGNÓSTICO] t={t:F6}, denom={denom:F6}, numerador={Vector3.Dot(planeNormal, planePoint - ray.origin):F6}");
                 if (t >= 0f)
                 {
                     Vector3 worldPoint = ray.GetPoint(t);
+                    Debug.Log($"[PAINT] ✓ Intersección VÁLIDA en worldPoint={worldPoint}");
                     Vector2 uvCandidate = ComputeUVForSprite(worldPoint);
-                    // only accept hits inside the sprite rect (0..1 UV)
+                    Debug.Log($"[PAINT] UV candidate (antes de clamp): {uvCandidate}");
+                    // Solo aceptar hits dentro del rectángulo del sprite (0..1 UV)
                     if (uvCandidate.x >= 0f && uvCandidate.x <= 1f && uvCandidate.y >= 0f && uvCandidate.y <= 1f)
                     {
                         uv = uvCandidate;
                         haveHit = true;
-                        Debug.Log("[PAINT] ✓ Ray intersectó plano del sprite (manual) - UV: " + uv);
+                        Debug.Log($"[PAINT] ✓ Ray intersectó plano del sprite (manual) - UV: {uv}");
                     }
                     else
                     {
-                        Debug.Log("[PAINT] Ray intersectó el plano pero fuera del rect del sprite - UV candidate: " + uvCandidate);
+                        Debug.Log($"[PAINT] Ray intersectó el plano pero fuera del rect del sprite - UV candidate: {uvCandidate}");
                     }
                 }
                 else
                 {
-                    Debug.Log("[PAINT] Ray intersection detrás del origen (t=" + t + ")");
+                    Debug.Log($"[PAINT] Ray intersection detrás del origen (t={t})");
                 }
             }
             else
             {
-                Debug.Log("[PAINT] Ray paralelo al plano del sprite (denom=" + denom + ")");
+                Debug.Log($"[PAINT] Ray paralelo al plano del sprite (denom={denom})");
             }
         }
 
@@ -526,20 +531,31 @@ public class Paint : MonoBehaviour
         if (spriteRenderer == null || spriteRenderer.sprite == null) return Vector2.zero;
         Sprite s = spriteRenderer.sprite;
 
-        // Convert world point to local space of the sprite
+        // Convertir el punto mundial a espacio local del sprite
         Vector3 local = spriteRenderer.transform.InverseTransformPoint(worldPoint);
+        Debug.Log($"[PAINT][UV] local={local}");
 
+        // El rectángulo del sprite en píxeles dentro de la textura
+        Rect rect = s.rect;
+        Vector2 pivot = s.pivot;
         float ppu = s.pixelsPerUnit;
-        Vector2 localPixels = new Vector2(local.x * ppu, local.y * ppu);
 
-        Vector2 pivot = s.pivot; // in pixels
-        Rect rect = s.rect; // position and size in texture pixels
+        // Coordenadas locales en unidades del sprite (centro en 0,0)
+        // El área visible del sprite va de (-rect.width/2, -rect.height/2) a (+rect.width/2, +rect.height/2) en unidades/ppu
+        float localX = local.x * ppu + pivot.x;
+        float localY = local.y * ppu + pivot.y;
 
-        Vector2 pixelCoord = pivot + localPixels;
-        Vector2 texPixel = new Vector2(rect.x + pixelCoord.x, rect.y + pixelCoord.y);
+        // Coordenadas en píxeles dentro de la textura
+        float texX = rect.x + localX;
+        float texY = rect.y + localY;
 
-        float u = texPixel.x / s.texture.width;
-        float v = texPixel.y / s.texture.height;
+        // Normalizar a UV (0..1) respecto a la textura completa
+        float u = texX / s.texture.width;
+        float v = texY / s.texture.height;
+
+        Debug.Log($"[PAINT][UV] texX={texX}, texY={texY}, u={u}, v={v}");
+
+        // Clamp para evitar saltos fuera de rango
         return new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
     }
 
