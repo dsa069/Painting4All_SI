@@ -38,6 +38,7 @@ public class Paint : MonoBehaviour
     const float triggerLogInterval = 2.0f; // seconds (reduced frequency)
 
     int lastPx = -1, lastPy = -1;
+    int lastDrawPx = -1, lastDrawPy = -1;  // Track last position where we actually painted
 
     void Start()
     {
@@ -421,14 +422,37 @@ public class Paint : MonoBehaviour
 #endif
             if (painting)
             {
-                Debug.Log("[PAINT] Dibujando círculo en píxel (" + px + ", " + py + ")");
-                DrawCircle(runtimeTex, px, py, brushSize, brushColor);
+                Debug.Log("[PAINT] Dibujando en píxel (" + px + ", " + py + ")");
+                
+                // Si es la primera pintura o si se movió, dibujar línea continua
+                if (lastDrawPx >= 0 && lastDrawPy >= 0 && (px != lastDrawPx || py != lastDrawPy))
+                {
+                    // Dibujar línea de círculos desde la última posición
+                    DrawStroke(runtimeTex, lastDrawPx, lastDrawPy, px, py, brushSize, brushColor);
+                }
+                else
+                {
+                    // Primera pintura o mismo píxel
+                    DrawCircle(runtimeTex, px, py, brushSize, brushColor);
+                }
+                
                 runtimeTex.Apply();
+                lastDrawPx = px;
+                lastDrawPy = py;
+                
                 // keep preview in sync
                 if (previewEnabled)
                 {
                     UpdatePreview(px, py);
                 }
+            }
+            else
+            {
+                // Cuando sueltes el botón, resetea la última posición de pintura
+                lastDrawPx = -1;
+                lastDrawPy = -1;
+                ApplyRuntimeTextureToMaterial();
+                lastPx = lastPy = -1;
             }
         }
         else
@@ -612,6 +636,41 @@ public class Paint : MonoBehaviour
                     Color outc = Color.Lerp(src, col, col.a);
                     tex.SetPixel(x, y, outc);
                 }
+            }
+        }
+    }
+
+    void DrawStroke(Texture2D tex, int fromX, int fromY, int toX, int toY, int radius, Color col)
+    {
+        // Bresenham's line algorithm para interpolar suavemente entre dos puntos
+        int dx = Mathf.Abs(toX - fromX);
+        int dy = Mathf.Abs(toY - fromY);
+        int sx = fromX < toX ? 1 : -1;
+        int sy = fromY < toY ? 1 : -1;
+        int err = dx - dy;
+
+        int x = fromX;
+        int y = fromY;
+
+        while (true)
+        {
+            // Dibujar círculo en esta posición
+            DrawCircle(tex, x, y, radius, col);
+            
+            // Si llegamos al destino, terminar
+            if (x == toX && y == toY) break;
+
+            // Calcular siguiente posición
+            int e2 = 2 * err;
+            if (e2 > -dy)
+            {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 < dx)
+            {
+                err += dx;
+                y += sy;
             }
         }
     }
