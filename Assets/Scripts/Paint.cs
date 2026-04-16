@@ -166,48 +166,61 @@ public class Paint : MonoBehaviour
         Debug.Log("[PAINT] Update() ejecutándose");
 
         Ray ray;
-        // PRIORITY: Use detected RIGHT controller > LEFT controller > assigned rayOrigin
-        Transform activePointer = rayOrigin;
+        // PRIORIDAD: RIGHT controller > LEFT controller > rayOrigin
+        Transform activePointer = null;
+        string pointerSource = "";
         if (rightControllerTransform != null)
         {
             activePointer = rightControllerTransform;
-            Debug.Log("[PAINT] Raycast desde RIGHT Controller (mando), NO cámara");
+            pointerSource = "RIGHT Controller (mando)";
         }
         else if (leftControllerTransform != null)
         {
             activePointer = leftControllerTransform;
-            Debug.Log("[PAINT] Raycast desde LEFT Controller (mando), NO cámara");
+            pointerSource = "LEFT Controller (mando)";
         }
-        
-        if (useMouseForEditor && Application.isEditor)
+        else if (rayOrigin != null)
         {
-            if (Camera.main == null) return;
-            Vector2 mousePos;
-#if ENABLE_LEGACY_INPUT_MANAGER
-            mousePos = Input.mousePosition;
-#elif ENABLE_INPUT_SYSTEM
-            var m = Mouse.current;
-            if (m == null) return;
-            mousePos = m.position.ReadValue();
-#else
-            // No supported input backend available
-            return;
-#endif
-            ray = Camera.main.ScreenPointToRay(mousePos);
+            activePointer = rayOrigin;
+            pointerSource = "rayOrigin (asignado manualmente)";
         }
         else
         {
-            if (activePointer == null) 
+            pointerSource = "NINGUNO (activePointer es NULL)";
+        }
+
+        Debug.Log($"[PAINT] [DEBUG] activePointer seleccionado: {pointerSource} {(activePointer != null ? "[" + activePointer.name + "]" : "[NULL]")}");
+
+        // if (useMouseForEditor && Application.isEditor)
+        // {
+        //     if (Camera.main == null) return;
+        //     Vector2 mousePos;
+        // #if ENABLE_LEGACY_INPUT_MANAGER
+        //     mousePos = Input.mousePosition;
+        // #elif ENABLE_INPUT_SYSTEM
+        //     var m = Mouse.current;
+        //     if (m == null) return;
+        //     mousePos = m.position.ReadValue();
+        // #else
+        //     // No supported input backend available
+        //     return;
+        // #endif
+        //     ray = Camera.main.ScreenPointToRay(mousePos);
+        //     Debug.Log("[PAINT] Raycast desde Mouse/Editor (cámara)");
+        // }
+        //else
+        //{
+            if (activePointer == null)
             {
-                Debug.LogWarning("[PAINT] activePointer es NULL - no se puede hacer raycast en VR");
+                Debug.LogWarning("[PAINT] [ERROR] activePointer es NULL - no se puede hacer raycast en VR. Revisa la detección de controladores y el campo rayOrigin.");
                 return;
             }
-            Debug.Log("[PAINT] Raycast desde: " + activePointer.name + " pos=" + activePointer.position);
+            Debug.Log($"[PAINT] Raycast desde: {activePointer.name} pos={activePointer.position} (fuente: {pointerSource})");
             // IMPORTANTE: Usar la dirección inversa porque el controlador apunta "hacia atrás"
             // en relación al lienzo (está en la mano del usuario mirando hacia adentro)
             ray = new Ray(activePointer.position, -activePointer.forward);
             Debug.Log("[PAINT] Ray direction invertida: " + (-activePointer.forward));
-        }
+        //}
 
         // Try sprite plane intersection first (so SpriteRenderer works without a MeshCollider)
         bool haveHit = false;
@@ -288,12 +301,12 @@ public class Paint : MonoBehaviour
             painting = Input.GetMouseButton(0) || Input.GetButton("Fire1") || Input.GetKey(paintKey);
 #elif ENABLE_INPUT_SYSTEM
             Debug.Log("[PAINT] Usando INPUT SYSTEM");
-            var m2 = Mouse.current;
-            if (m2 != null && m2.leftButton.isPressed) 
-            {
-                Debug.Log("[PAINT] Mouse izquierdo detectado");
-                painting = true;
-            }
+            // var m2 = Mouse.current;
+            // if (m2 != null && m2.leftButton.isPressed) 
+            // {
+            //     Debug.Log("[PAINT] Mouse izquierdo detectado");
+            //     painting = true;
+            // }
             var gp = Gamepad.current;
             if (!painting && gp != null && gp.buttonSouth.isPressed) 
             {
