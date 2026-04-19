@@ -12486,8 +12486,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c456c15bbf203d45bfed48d9d731830, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GestureUIController
-  leftHandReference: {fileID: 977348497}
-  rightHandReference: {fileID: 421506717}
+  leftHandReference: {fileID: 0}
+  rightHandReference: {fileID: 0}
   canvasHeightOffset: 0.15
   canvasScale: 0.05
   fistClosureThreshold: 0.7

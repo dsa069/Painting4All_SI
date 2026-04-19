@@ -16,17 +16,17 @@ using System.Collections.Generic;
 /// - Apuntar (Pointing) → "PI"
 /// - Sin gesto → Canvas desaparece
 /// 
-/// CONFIGURACIÓN EN INSPECTOR (Solo 2 pasos):
-/// 1. Asigna en "Left Hand Reference" el GameObject que contiene IHand de mano izquierda
-///    (típicamente: LeftHandAnchor que tenga componente IHand)
-/// 2. Asigna en "Right Hand Reference" el GameObject que contiene IHand de mano derecha
-///    (típicamente: RightHandAnchor que tenga componente IHand)
+/// CONFIGURACIÓN EN INSPECTOR (¡Automática!):
+/// NO NECESITAS ASIGNAR NADA EN EL INSPECTOR. El script auto-detecta automáticamente:
+/// - Las manos (IHand) buscando en la escena
+/// - Crea el Canvas 3D dinámicamente
+/// - Crea el Text flotante automáticamente
 /// 
-/// ¡Eso es todo! El script crea automáticamente el Canvas 3D y el Text en runtime.
+/// ¡Solo crea un GameObject vacío, agrega el script y listo!
 /// </summary>
 public class GestureUIController : MonoBehaviour
 {
-    [Header("Hand References (Meta XR)")]
+    [Header("Hand References (Auto-detected if empty)")]
     [SerializeField] 
     private MonoBehaviour leftHandReference;
     
@@ -35,10 +35,10 @@ public class GestureUIController : MonoBehaviour
 
     [Header("Canvas Configuration")]
     [SerializeField] 
-    private float canvasHeightOffset = 0.15f;
+    private float canvasHeightOffset = 0.08f;
     
     [SerializeField] 
-    private float canvasScale = 0.05f;
+    private float canvasScale = 0.08f;
 
     [Header("Gesture Settings")]
     [SerializeField] 
@@ -64,9 +64,8 @@ public class GestureUIController : MonoBehaviour
     private IHand rightHand;
 
     // Canvas y texto flotante
-    private Canvas runtimeGestureCanvas;
-    private TextMeshProUGUI gestureTextMesh;
-    private RectTransform canvasRectTransform;
+    private GameObject textContainer;
+    private TextMeshPro gestureTextMesh3D;
 
     // Estado actual
     private string currentGesture = null;
@@ -112,100 +111,101 @@ public class GestureUIController : MonoBehaviour
 
     /// <summary>
     /// Inicializa las referencias a las manos desde MonoBehaviour (que deben implementar IHand)
+    /// Si no están asignadas, las auto-detecta buscando en la escena
     /// </summary>
     private void InitializeHandReferences()
     {
+        // Intentar obtener IHand desde referencias asignadas
         if (leftHandReference != null)
         {
             leftHand = leftHandReference as IHand;
-            if (leftHand == null)
-            {
-                Debug.LogWarning("Left Hand Reference no implementa IHand. Buscando automáticamente...");
-                leftHand = FindHandByName("Left");
-            }
         }
-        else
-        {
-            Debug.LogWarning("Left Hand Reference no asignado. Auto-detectando...");
-            leftHand = FindHandByName("Left");
-        }
-
+        
         if (rightHandReference != null)
         {
             rightHand = rightHandReference as IHand;
-            if (rightHand == null)
-            {
-                Debug.LogWarning("Right Hand Reference no implementa IHand. Buscando automáticamente...");
-                rightHand = FindHandByName("Right");
-            }
         }
-        else
+
+        // Auto-detectar si no se asignaron
+        if (leftHand == null || rightHand == null)
         {
-            Debug.LogWarning("Right Hand Reference no asignado. Auto-detectando...");
-            rightHand = FindHandByName("Right");
+            Debug.Log("Auto-detectando manos en la escena...");
+            AutoDetectHands();
         }
 
         if (leftHand == null || rightHand == null)
         {
-            Debug.LogError("No se pudieron encontrar referencias a manos. Asigna Left/Right Hand References en el Inspector.");
+            Debug.LogError("ERROR: No se pudieron encontrar referencias a manos IHand. " +
+                "Verifica que LeftHandAnchor y RightHandAnchor existan en la escena con componentes IHand.");
+        }
+        else
+        {
+            Debug.Log("✓ Manos detectadas correctamente.");
         }
     }
 
     /// <summary>
-    /// Auto-detecta manos buscando por nombre (fallback si no hay referencias asignadas)
+    /// Auto-detecta manos buscando componentes IHand en la escena
     /// </summary>
-    private IHand FindHandByName(string handSide)
+    private void AutoDetectHands()
     {
+        // Buscar TODOS los componentes IHand en la escena
         var allMonoBehaviours = FindObjectsOfType<MonoBehaviour>();
+        
         foreach (var mb in allMonoBehaviours)
         {
-            if (mb is IHand hand)
+            IHand hand = mb as IHand;
+            if (hand != null)
             {
                 string name = mb.name.ToLower();
-                if ((handSide == "Left" && name.Contains("left")) || 
-                    (handSide == "Right" && name.Contains("right")))
+                string parentName = mb.transform.parent != null ? mb.transform.parent.name.ToLower() : "";
+                
+                // Buscar "Left" en el nombre del objeto o del padre
+                if ((name.Contains("left") || parentName.Contains("left")) && leftHand == null)
                 {
-                    return hand;
+                    leftHand = hand;
+                    Debug.Log($"✓ Left Hand detectada en: {mb.name}");
                 }
+                
+                // Buscar "Right" en el nombre del objeto o del padre
+                if ((name.Contains("right") || parentName.Contains("right")) && rightHand == null)
+                {
+                    rightHand = hand;
+                    Debug.Log($"✓ Right Hand detectada en: {mb.name}");
+                }
+                
+                // Si ambas están detectadas, salir del loop
+                if (leftHand != null && rightHand != null)
+                    break;
             }
         }
-        return null;
     }
 
     /// <summary>
-    /// Crea dinámicamente el Canvas 3D para mostrar el texto flotante
+    /// Crea un TextMesh 3D para mostrar el texto flotante
     /// </summary>
     private void InitializeGestureCanvas()
     {
-        // Crear Canvas 3D dinámicamente
-        GameObject canvasGO = new GameObject("GestureTextCanvas");
-        runtimeGestureCanvas = canvasGO.AddComponent<Canvas>();
-        runtimeGestureCanvas.renderMode = RenderMode.WorldSpace;
-
-        canvasRectTransform = canvasGO.GetComponent<RectTransform>();
-        canvasRectTransform.sizeDelta = new Vector2(100, 100);
-        canvasRectTransform.localScale = new Vector3(canvasScale, canvasScale, canvasScale);
-
-        // Crear TextMeshPro Text
-        GameObject textGO = new GameObject("GestureText");
-        textGO.transform.SetParent(canvasGO.transform);
-        textGO.transform.localPosition = Vector3.zero;
-
-        gestureTextMesh = textGO.AddComponent<TextMeshProUGUI>();
-        gestureTextMesh.text = "";
-        gestureTextMesh.alignment = TextAlignmentOptions.Center;
-        gestureTextMesh.fontSize = 72;
-
-        RectTransform textRect = textGO.GetComponent<RectTransform>();
-        textRect.sizeDelta = new Vector2(100, 100);
-
-        if (gestureTextMesh == null)
+        // Crear GameObject para contener el TextMesh 3D
+        textContainer = new GameObject("GestureTextMesh");
+        gestureTextMesh3D = textContainer.AddComponent<TextMeshPro>();
+        
+        // Configurar el TextMesh 3D
+        gestureTextMesh3D.text = "";
+        gestureTextMesh3D.fontSize = 36;
+        gestureTextMesh3D.alignment = TextAlignmentOptions.Center;
+        gestureTextMesh3D.color = Color.white;
+        
+        // Escalar el objeto para que sea pequeño en el mundo
+        textContainer.transform.localScale = new Vector3(canvasScale, canvasScale, canvasScale);
+        
+        if (gestureTextMesh3D == null)
         {
-            Debug.LogError("Error creando TextMeshProUGUI. Verifica que TMPro está instalado.");
+            Debug.LogError("Error creando TextMeshPro 3D. Verifica que TMPro está instalado.");
         }
 
         // Inicialmente desactivado
-        runtimeGestureCanvas.gameObject.SetActive(false);
+        textContainer.SetActive(false);
     }
 
     /// <summary>
@@ -302,11 +302,11 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Muestra el Canvas con el texto del gesto, posicionado sobre la mano
+    /// Muestra el TextMesh 3D con el texto del gesto, posicionado sobre la mano
     /// </summary>
     private void ShowGesture(string gestureName, IHand hand)
     {
-        if (runtimeGestureCanvas == null || gestureTextMesh == null)
+        if (textContainer == null || gestureTextMesh3D == null)
             return;
 
         // Obtener el texto a mostrar
@@ -315,36 +315,36 @@ public class GestureUIController : MonoBehaviour
             displayText = gestureName;
         }
 
-        gestureTextMesh.text = displayText;
+        gestureTextMesh3D.text = displayText;
 
-        // Posicionar canvas sobre la mano (HandWristRoot + offset)
+        // Posicionar texto sobre la mano (HandWristRoot + offset)
         if (hand.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
         {
             Vector3 displayPosition = wristPose.position;
             displayPosition.y += canvasHeightOffset;
 
-            canvasRectTransform.position = displayPosition;
+            textContainer.transform.position = displayPosition;
 
-            // Billboard: hacer que el Canvas siempre mire a la cámara
-            canvasRectTransform.LookAt(Camera.main.transform);
-            canvasRectTransform.Rotate(0, 180, 0);  // Invertir para que esté de frente
+            // Hacer que el texto siempre mire a la cámara (billboard)
+            textContainer.transform.LookAt(Camera.main.transform);
+            textContainer.transform.Rotate(0, 180, 0);
         }
 
-        // Activar canvas si no está activo
-        if (!runtimeGestureCanvas.gameObject.activeSelf)
+        // Activar si no está activo
+        if (!textContainer.activeSelf)
         {
-            runtimeGestureCanvas.gameObject.SetActive(true);
+            textContainer.SetActive(true);
         }
     }
 
     /// <summary>
-    /// Oculta el Canvas de gesto
+    /// Oculta el TextMesh 3D de gesto
     /// </summary>
     private void HideGestureCanvas()
     {
-        if (runtimeGestureCanvas != null && runtimeGestureCanvas.gameObject.activeSelf)
+        if (textContainer != null && textContainer.activeSelf)
         {
-            runtimeGestureCanvas.gameObject.SetActive(false);
+            textContainer.SetActive(false);
         }
     }
 
