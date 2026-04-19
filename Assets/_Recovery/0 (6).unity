@@ -12499,7 +12499,7 @@ MonoBehaviour:
   rightHandReference: {fileID: 421506717}
   canvasHeightOffset: 0.15
   canvasScale: 0.05
-  fistClosureThreshold: 0.25
+  fistClosureThreshold: 0.7
   pointingFingerRelaxThreshold: 0.5
   pinchThresholdT1: 0.6
   pinchThresholdT2: 0.5
