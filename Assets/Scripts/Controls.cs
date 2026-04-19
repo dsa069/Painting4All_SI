@@ -46,7 +46,7 @@ public class GestureUIController : MonoBehaviour
 
     [Header("Gesture Settings")]
     [SerializeField] 
-    private float fistClosureThreshold = 0.7f;
+    private float fistClosureThreshold = 0.4f;
     
     [SerializeField] 
     private float pointingFingerRelaxThreshold = 0.5f;
@@ -271,7 +271,8 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Detecta si todos los dedos están pinzando (puño cerrado)
+    /// Detecta si todos los dedos están cerrados (puño cerrado)
+    /// Usa promedio de fuerza de pinch para ser más tolerante con variaciones naturales
     /// </summary>
     private bool IsFistClosed(IHand hand)
     {
@@ -283,14 +284,15 @@ public class GestureUIController : MonoBehaviour
         float ringStrength = hand.GetFingerPinchStrength(HandFinger.Ring);
         float pinkyStrength = hand.GetFingerPinchStrength(HandFinger.Pinky);
 
-        return indexStrength > fistClosureThreshold &&
-               middleStrength > fistClosureThreshold &&
-               ringStrength > fistClosureThreshold &&
-               pinkyStrength > fistClosureThreshold;
+        // Usar promedio: más tolerante que requerir TODOS > threshold
+        float averageStrength = (indexStrength + middleStrength + ringStrength + pinkyStrength) / 4f;
+        return averageStrength > 0.25f;
     }
 
     /// <summary>
     /// Detecta si el índice está extendido (pointing gesture)
+    /// Verifica que el índice sea significativamente más relajado que los otros dedos
+    /// para distinguir pointing de una palma abierta en reposo
     /// </summary>
     private bool IsPointing(IHand hand)
     {
@@ -298,17 +300,24 @@ public class GestureUIController : MonoBehaviour
             return false;
 
         // El índice debe estar extendido (baja fuerza de pinch)
-        // y otros dedos relajados
+        // y otros dedos DEBEN estar más cerrados para distinguir de palma abierta
         float indexPinch = hand.GetFingerPinchStrength(HandFinger.Index);
         float middlePinch = hand.GetFingerPinchStrength(HandFinger.Middle);
         float ringPinch = hand.GetFingerPinchStrength(HandFinger.Ring);
         float pinkyPinch = hand.GetFingerPinchStrength(HandFinger.Pinky);
 
-        return indexPinch < pointingFingerRelaxThreshold &&
-               middlePinch < pointingFingerRelaxThreshold &&
-               ringPinch < pointingFingerRelaxThreshold &&
-               pinkyPinch < pointingFingerRelaxThreshold &&
-               hand.GetPointerPose(out _);  // Verifica que el pointer pose es válido
+        // El índice debe estar extendido (bajo)
+        bool indexExtended = indexPinch < pointingFingerRelaxThreshold;
+        
+        // Los otros dedos DEBEN estar significativamente más cerrados que el índice
+        // Esto crea el patrón único de "pointing": índice extendido + otros dedos curvados
+        bool otherFingersCurled = (middlePinch > indexPinch + 0.25f) ||
+                                   (ringPinch > indexPinch + 0.25f);
+        
+        // Validar que el pointer pose es válido
+        bool hasValidPointerPose = hand.GetPointerPose(out _);
+
+        return indexExtended && otherFingersCurled && hasValidPointerPose;
     }
 
     /// <summary>
