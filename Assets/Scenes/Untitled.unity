@@ -11602,6 +11602,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1422608715}
+  - component: {fileID: 1422608716}
   m_Layer: 0
   m_Name: TrackerAnchor
   m_TagString: Untagged
@@ -11624,6 +11625,38 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1143980458}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1422608716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1422608714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c456c15bbf203d45bfed48d9d731830, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GestureUIController
+  leftHandReference: {fileID: 0}
+  rightHandReference: {fileID: 0}
+  gestureCanvasPrefab: {fileID: 0}
+  canvasHeightOffset: 0.15
+  canvasScale: 0.05
+  fistClosureThreshold: 0.7
+  pointingFingerRelaxThreshold: 0.5
+  gestureMappings:
+  - gestureName: IndexThumb
+    displayText: T1
+  - gestureName: MiddleThumb
+    displayText: T2
+  - gestureName: RingThumb
+    displayText: B1
+  - gestureName: PinkyThumb
+    displayText: B2
+  - gestureName: Fist
+    displayText: J
+  - gestureName: Pointing
+    displayText: PI
 --- !u!1 &1434796340
 GameObject:
   m_ObjectHideFlags: 0
@@ -12379,6 +12412,70 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 17912441}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1578238432
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1578238434}
+  - component: {fileID: 1578238433}
+  m_Layer: 0
+  m_Name: GestureManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1578238433
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1578238432}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c456c15bbf203d45bfed48d9d731830, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GestureUIController
+  leftHandReference: {fileID: 1840263779}
+  rightHandReference: {fileID: 421506717}
+  gestureCanvasPrefab: {fileID: 0}
+  canvasHeightOffset: 0.15
+  canvasScale: 0.05
+  fistClosureThreshold: 0.7
+  pointingFingerRelaxThreshold: 0.5
+  gestureMappings:
+  - gestureName: IndexThumb
+    displayText: T1
+  - gestureName: MiddleThumb
+    displayText: T2
+  - gestureName: RingThumb
+    displayText: B1
+  - gestureName: PinkyThumb
+    displayText: B2
+  - gestureName: Fist
+    displayText: J
+  - gestureName: Pointing
+    displayText: PI
+--- !u!4 &1578238434
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1578238432}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 6.49601, y: 2.72701, z: 4.72068}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1586641907
 GameObject:
@@ -13927,7 +14024,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Paint
   rayOrigin: {fileID: 0}
-  useMouseForEditor: 1
   paintKey: 330
   brushSize: 16
   brushColor: {r: 1, g: 0, b: 0, a: 1}
@@ -16870,3 +16966,4 @@ SceneRoots:
   - {fileID: 179860473}
   - {fileID: 1247219940}
   - {fileID: 898382779}
+  - {fileID: 1578238434}
