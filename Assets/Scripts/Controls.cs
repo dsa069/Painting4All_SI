@@ -53,17 +53,6 @@ public class GestureUIController : MonoBehaviour
     private float pointingFingerRelaxThreshold = 0.5f;
 
     [Header("Pinch Detection Settings")]
-    [SerializeField]
-    private float pinchThresholdT1 = 0.60f; // Index + Thumb (most reliable)
-    
-    [SerializeField]
-    private float pinchThresholdT2 = 0.50f; // Middle + Thumb (medium)
-    
-    [SerializeField]
-    private float pinchThresholdB1 = 0.40f; // Ring + Thumb (high noise)
-    
-    [SerializeField]
-    private float pinchThresholdB2 = 0.30f; // Pinky + Thumb (very high noise)
     
     [SerializeField]
     private float thumbMinimumStrength = 0.40f; // Verificar que el pulgar también pinza
@@ -293,7 +282,7 @@ public class GestureUIController : MonoBehaviour
         float indexStrength = hand.GetFingerPinchStrength(HandFinger.Index);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return indexStrength > pinchThresholdT1 && thumbStrength > thumbMinimumStrength;
+        return indexStrength > 0.60f && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -307,7 +296,7 @@ public class GestureUIController : MonoBehaviour
         float middleStrength = hand.GetFingerPinchStrength(HandFinger.Middle);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return middleStrength > pinchThresholdT2 && thumbStrength > thumbMinimumStrength;
+        return middleStrength > 0.5f && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -321,7 +310,7 @@ public class GestureUIController : MonoBehaviour
         float ringStrength = hand.GetFingerPinchStrength(HandFinger.Ring);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return ringStrength > pinchThresholdB1 && thumbStrength > thumbMinimumStrength;
+        return ringStrength > 0.40f && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -335,7 +324,7 @@ public class GestureUIController : MonoBehaviour
         float pinkyStrength = hand.GetFingerPinchStrength(HandFinger.Pinky);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return pinkyStrength > pinchThresholdB2 && thumbStrength > thumbMinimumStrength;
+        return pinkyStrength > 0.30f && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -362,7 +351,7 @@ public class GestureUIController : MonoBehaviour
 
         if (IsFistClosed(hand))
             return "Fist";
-
+        
         if (IsPinchB1(hand))
         {
             frameCounter["B1"] = frameCounter["B1"] + 1;
@@ -381,9 +370,10 @@ public class GestureUIController : MonoBehaviour
         else
             frameCounter["B2"] = 0;
 
+            
         if (IsPointing(hand))
             return "Pointing";
-            
+
         if (IsPinchT2(hand))
         {
             frameCounter["T2"] = frameCounter["T2"] + 1;
