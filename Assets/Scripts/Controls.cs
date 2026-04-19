@@ -5,22 +5,26 @@ using Oculus.Interaction.Input;
 using System.Collections.Generic;
 
 /// <summary>
-/// GestureUIController - Sistema de detección de gestos de manos con visualización de texto flotante
+/// GestureUIController - Sistema de detección INDEPENDIENTE de gestos en AMBAS manos simultáneamente
 /// 
-/// Detecta 7 gestos específicos en ambas manos (Meta XR SDK v85.0):
+/// Detecta 7 gestos específicos en AMBAS manos (Meta XR SDK v85.0) de forma SIMULTÁNEA:
 /// - Pinza Thumb + Index → "T1"
 /// - Pinza Thumb + Middle → "T2"
 /// - Pinza Thumb + Ring → "B1"
 /// - Pinza Thumb + Pinky → "B2"
 /// - Puño Cerrado (Fist) → "J"
 /// - Apuntar (Pointing) → "PI"
-/// - Sin gesto → Canvas desaparece
+/// - Sin gesto → TextMesh correspondiente se oculta
+/// 
+/// IMPORTANTE: Ahora cada mano se detecta de forma INDEPENDIENTE.
+/// Si la mano derecha hace un gesto y la izquierda otro diferente,
+/// AMBOS se mostrarán simultáneamente, cada uno sobre su mano.
 /// 
 /// CONFIGURACIÓN EN INSPECTOR (¡Automática!):
 /// NO NECESITAS ASIGNAR NADA EN EL INSPECTOR. El script auto-detecta automáticamente:
 /// - Las manos (IHand) buscando en la escena
-/// - Crea el Canvas 3D dinámicamente
-/// - Crea el Text flotante automáticamente
+/// - Crea dos TextMesh 3D dinámicamente (uno por mano)
+/// - Detecta gestos independientes en cada mano en simultáneo
 /// 
 /// ¡Solo crea un GameObject vacío, agrega el script y listo!
 /// </summary>
@@ -38,7 +42,7 @@ public class GestureUIController : MonoBehaviour
     private float canvasHeightOffset = 0.08f;
     
     [SerializeField] 
-    private float canvasScale = 0.08f;
+    private float canvasScale = 0.01f;
 
     [Header("Gesture Settings")]
     [SerializeField] 
@@ -63,13 +67,13 @@ public class GestureUIController : MonoBehaviour
     private IHand leftHand;
     private IHand rightHand;
 
-    // Canvas y texto flotante
-    private GameObject textContainer;
-    private TextMeshPro gestureTextMesh3D;
+    // TextMesh 3D para AMBAS manos (independientes)
+    private GameObject leftTextContainer;
+    private GameObject rightTextContainer;
+    private TextMeshPro leftGestureTextMesh3D;
+    private TextMeshPro rightGestureTextMesh3D;
 
     // Estado actual
-    private string currentGesture = null;
-
     private Dictionary<string, string> gestureToTextMap = new Dictionary<string, string>();
 
     void Start()
@@ -87,25 +91,27 @@ public class GestureUIController : MonoBehaviour
             return;
         }
 
-        // Detectar gestos en ambas manos (prioritizar la mano con gesto activo)
+        // Detectar gestos en AMBAS manos de forma independiente
         string rightGesture = DetectActiveGesture(rightHand);
         string leftGesture = DetectActiveGesture(leftHand);
 
-        // Mostrar el gesto detectado (si hay)
+        // Mostrar o ocultar gestos de forma independiente
         if (!string.IsNullOrEmpty(rightGesture))
         {
-            ShowGesture(rightGesture, rightHand);
-            currentGesture = rightGesture;
-        }
-        else if (!string.IsNullOrEmpty(leftGesture))
-        {
-            ShowGesture(leftGesture, leftHand);
-            currentGesture = leftGesture;
+            ShowGestureForHand(rightGesture, rightHand, true);
         }
         else
         {
-            HideGestureCanvas();
-            currentGesture = null;
+            HideGestureForHand(true);
+        }
+
+        if (!string.IsNullOrEmpty(leftGesture))
+        {
+            ShowGestureForHand(leftGesture, leftHand, false);
+        }
+        else
+        {
+            HideGestureForHand(false);
         }
     }
 
@@ -182,30 +188,34 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Crea un TextMesh 3D para mostrar el texto flotante
+    /// Crea TextMesh 3D para AMBAS manos
     /// </summary>
     private void InitializeGestureCanvas()
     {
-        // Crear GameObject para contener el TextMesh 3D
-        textContainer = new GameObject("GestureTextMesh");
-        gestureTextMesh3D = textContainer.AddComponent<TextMeshPro>();
-        
-        // Configurar el TextMesh 3D
-        gestureTextMesh3D.text = "";
-        gestureTextMesh3D.fontSize = 36;
-        gestureTextMesh3D.alignment = TextAlignmentOptions.Center;
-        gestureTextMesh3D.color = Color.white;
-        
-        // Escalar el objeto para que sea pequeño en el mundo
-        textContainer.transform.localScale = new Vector3(canvasScale, canvasScale, canvasScale);
-        
-        if (gestureTextMesh3D == null)
+        // TextMesh para mano DERECHA
+        rightTextContainer = new GameObject("GestureTextMesh_Right");
+        rightGestureTextMesh3D = rightTextContainer.AddComponent<TextMeshPro>();
+        rightGestureTextMesh3D.text = "";
+        rightGestureTextMesh3D.fontSize = 36;
+        rightGestureTextMesh3D.alignment = TextAlignmentOptions.Center;
+        rightGestureTextMesh3D.color = Color.white;
+        rightTextContainer.transform.localScale = new Vector3(canvasScale, canvasScale, canvasScale);
+        rightTextContainer.SetActive(false);
+
+        // TextMesh para mano IZQUIERDA
+        leftTextContainer = new GameObject("GestureTextMesh_Left");
+        leftGestureTextMesh3D = leftTextContainer.AddComponent<TextMeshPro>();
+        leftGestureTextMesh3D.text = "";
+        leftGestureTextMesh3D.fontSize = 36;
+        leftGestureTextMesh3D.alignment = TextAlignmentOptions.Center;
+        leftGestureTextMesh3D.color = Color.white;
+        leftTextContainer.transform.localScale = new Vector3(canvasScale, canvasScale, canvasScale);
+        leftTextContainer.SetActive(false);
+
+        if (leftGestureTextMesh3D == null || rightGestureTextMesh3D == null)
         {
             Debug.LogError("Error creando TextMeshPro 3D. Verifica que TMPro está instalado.");
         }
-
-        // Inicialmente desactivado
-        textContainer.SetActive(false);
     }
 
     /// <summary>
@@ -302,11 +312,14 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Muestra el TextMesh 3D con el texto del gesto, posicionado sobre la mano
+    /// Muestra el TextMesh 3D de UNA MANO con el texto del gesto
     /// </summary>
-    private void ShowGesture(string gestureName, IHand hand)
+    private void ShowGestureForHand(string gestureName, IHand hand, bool isRightHand)
     {
-        if (textContainer == null || gestureTextMesh3D == null)
+        GameObject textContainer = isRightHand ? rightTextContainer : leftTextContainer;
+        TextMeshPro textMesh = isRightHand ? rightGestureTextMesh3D : leftGestureTextMesh3D;
+
+        if (textContainer == null || textMesh == null)
             return;
 
         // Obtener el texto a mostrar
@@ -315,7 +328,7 @@ public class GestureUIController : MonoBehaviour
             displayText = gestureName;
         }
 
-        gestureTextMesh3D.text = displayText;
+        textMesh.text = displayText;
 
         // Posicionar texto sobre la mano (HandWristRoot + offset)
         if (hand.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
@@ -338,14 +351,28 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Oculta el TextMesh 3D de gesto
+    /// Oculta el TextMesh 3D de UNA MANO
     /// </summary>
-    private void HideGestureCanvas()
+    private void HideGestureForHand(bool isRightHand)
     {
+        GameObject textContainer = isRightHand ? rightTextContainer : leftTextContainer;
+        
         if (textContainer != null && textContainer.activeSelf)
         {
             textContainer.SetActive(false);
         }
+    }
+
+    /// <summary>
+    /// Oculta ambos TextMesh 3D (cuando falla el tracking)
+    /// </summary>
+    private void HideGestureCanvas()
+    {
+        if (rightTextContainer != null && rightTextContainer.activeSelf)
+            rightTextContainer.SetActive(false);
+        
+        if (leftTextContainer != null && leftTextContainer.activeSelf)
+            leftTextContainer.SetActive(false);
     }
 
     /// <summary>
