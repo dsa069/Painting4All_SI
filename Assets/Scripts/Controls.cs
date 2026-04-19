@@ -261,11 +261,12 @@ public class GestureUIController : MonoBehaviour
         if (hand.GetFingerIsPinching(HandFinger.Pinky))
             return "PinkyThumb";
 
-        if (IsFistClosed(hand))
-            return "Fist";
-
+        // Pointing tiene prioridad sobre Fist
         if (IsPointing(hand))
             return "Pointing";
+
+        if (IsFistClosed(hand))
+            return "Fist";
 
         return null;
     }
@@ -273,10 +274,18 @@ public class GestureUIController : MonoBehaviour
     /// <summary>
     /// Detecta si todos los dedos están cerrados (puño cerrado)
     /// Usa promedio de fuerza de pinch para ser más tolerante con variaciones naturales
+    /// NO se activa si hay alguna pinza en progreso
     /// </summary>
     private bool IsFistClosed(IHand hand)
     {
         if (hand == null)
+            return false;
+
+        // Si hay alguna pinza activa, no es puño
+        if (hand.GetFingerIsPinching(HandFinger.Index) ||
+            hand.GetFingerIsPinching(HandFinger.Middle) ||
+            hand.GetFingerIsPinching(HandFinger.Ring) ||
+            hand.GetFingerIsPinching(HandFinger.Pinky))
             return false;
 
         float indexStrength = hand.GetFingerPinchStrength(HandFinger.Index);
@@ -293,10 +302,18 @@ public class GestureUIController : MonoBehaviour
     /// Detecta si el índice está extendido (pointing gesture)
     /// Verifica que el índice sea significativamente más relajado que los otros dedos
     /// para distinguir pointing de una palma abierta en reposo
+    /// NO se activa si hay alguna pinza en progreso
     /// </summary>
     private bool IsPointing(IHand hand)
     {
         if (hand == null)
+            return false;
+
+        // Si hay alguna pinza activa, no es pointing
+        if (hand.GetFingerIsPinching(HandFinger.Index) ||
+            hand.GetFingerIsPinching(HandFinger.Middle) ||
+            hand.GetFingerIsPinching(HandFinger.Ring) ||
+            hand.GetFingerIsPinching(HandFinger.Pinky))
             return false;
 
         // El índice debe estar extendido (baja fuerza de pinch)
