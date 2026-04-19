@@ -44,12 +44,41 @@ public class GestureUIController : MonoBehaviour
     [SerializeField] 
     private float canvasScale = 0.01f;
 
-    [Header("Gesture Settings")]
-    [SerializeField] 
-    private float fistClosureThreshold = 0.4f;
+    // Variable maldita
+    //[Header("Gesture Settings")]
+    //[SerializeField] 
+    //private float fistClosureThreshold = 0.25f;
     
     [SerializeField] 
     private float pointingFingerRelaxThreshold = 0.5f;
+
+    [Header("Pinch Detection Settings")]
+    [SerializeField]
+    private float pinchThresholdT1 = 0.60f; // Index + Thumb (most reliable)
+    
+    [SerializeField]
+    private float pinchThresholdT2 = 0.50f; // Middle + Thumb (medium)
+    
+    [SerializeField]
+    private float pinchThresholdB1 = 0.40f; // Ring + Thumb (high noise)
+    
+    [SerializeField]
+    private float pinchThresholdB2 = 0.30f; // Pinky + Thumb (very high noise)
+    
+    [SerializeField]
+    private float thumbMinimumStrength = 0.40f; // Verificar que el pulgar también pinza
+    
+    [SerializeField]
+    private int hysteresisFramesT1 = 2;
+    
+    [SerializeField]
+    private int hysteresisFramesT2 = 3;
+    
+    [SerializeField]
+    private int hysteresisFramesB1 = 4;
+    
+    [SerializeField]
+    private int hysteresisFramesB2 = 5;
 
     [Header("Gesture Text Mappings")]
     [SerializeField]
@@ -76,11 +105,16 @@ public class GestureUIController : MonoBehaviour
     // Estado actual
     private Dictionary<string, string> gestureToTextMap = new Dictionary<string, string>();
 
+    // Histéresis: rastrear frames consecutivos para cada pinza y mano
+    private Dictionary<string, int> pinchFrameCounterLeft = new Dictionary<string, int>();
+    private Dictionary<string, int> pinchFrameCounterRight = new Dictionary<string, int>();
+
     void Start()
     {
         InitializeHandReferences();
         InitializeGestureCanvas();
         BuildGestureMap();
+        InitializeHysteresisCounters();
     }
 
     void Update()
@@ -231,6 +265,80 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
+    /// Inicializa los contadores de histéresis para cada pinza y mano
+    /// </summary>
+    private void InitializeHysteresisCounters()
+    {
+        // Inicializar contadores para mano izquierda
+        pinchFrameCounterLeft["T1"] = 0;
+        pinchFrameCounterLeft["T2"] = 0;
+        pinchFrameCounterLeft["B1"] = 0;
+        pinchFrameCounterLeft["B2"] = 0;
+
+        // Inicializar contadores para mano derecha
+        pinchFrameCounterRight["T1"] = 0;
+        pinchFrameCounterRight["T2"] = 0;
+        pinchFrameCounterRight["B1"] = 0;
+        pinchFrameCounterRight["B2"] = 0;
+    }
+
+    /// <summary>
+    /// Detecta T1: Pinza Index + Thumb (más confiable)
+    /// </summary>
+    private bool IsPinchT1(IHand hand)
+    {
+        if (hand == null)
+            return false;
+
+        float indexStrength = hand.GetFingerPinchStrength(HandFinger.Index);
+        float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
+
+        return indexStrength > pinchThresholdT1 && thumbStrength > thumbMinimumStrength;
+    }
+
+    /// <summary>
+    /// Detecta T2: Pinza Middle + Thumb (requiere validación dual)
+    /// </summary>
+    private bool IsPinchT2(IHand hand)
+    {
+        if (hand == null)
+            return false;
+
+        float middleStrength = hand.GetFingerPinchStrength(HandFinger.Middle);
+        float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
+
+        return middleStrength > pinchThresholdT2 && thumbStrength > thumbMinimumStrength;
+    }
+
+    /// <summary>
+    /// Detecta B1: Pinza Ring + Thumb (difícil, requiere sensibilidad)
+    /// </summary>
+    private bool IsPinchB1(IHand hand)
+    {
+        if (hand == null)
+            return false;
+
+        float ringStrength = hand.GetFingerPinchStrength(HandFinger.Ring);
+        float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
+
+        return ringStrength > pinchThresholdB1 && thumbStrength > thumbMinimumStrength;
+    }
+
+    /// <summary>
+    /// Detecta B2: Pinza Pinky + Thumb (muy difícil, máxima sensibilidad)
+    /// </summary>
+    private bool IsPinchB2(IHand hand)
+    {
+        if (hand == null)
+            return false;
+
+        float pinkyStrength = hand.GetFingerPinchStrength(HandFinger.Pinky);
+        float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
+
+        return pinkyStrength > pinchThresholdB2 && thumbStrength > thumbMinimumStrength;
+    }
+
+    /// <summary>
     /// Valida que el tracking de manos sea válido
     /// </summary>
     private bool ValidateHandTracking()
@@ -242,31 +350,58 @@ public class GestureUIController : MonoBehaviour
     /// <summary>
     /// Detecta cuál es el gesto activo en una mano específica
     /// Retorna el nombre del gesto o null si no hay ninguno
+    /// Incluye validación de fuerza y histéresis para mejor estabilidad
     /// </summary>
     private string DetectActiveGesture(IHand hand)
     {
         if (hand == null || !hand.IsTrackedDataValid)
             return null;
 
-        // Orden de detección: pinzas específicas primero, luego puño, luego pointing
-        if (hand.GetFingerIsPinching(HandFinger.Index))
-            return "IndexThumb";
-        
-        if (hand.GetFingerIsPinching(HandFinger.Middle))
-            return "MiddleThumb";
-        
-        if (hand.GetFingerIsPinching(HandFinger.Ring))
-            return "RingThumb";
-        
-        if (hand.GetFingerIsPinching(HandFinger.Pinky))
-            return "PinkyThumb";
-
-        // Pointing tiene prioridad sobre Fist
-        if (IsPointing(hand))
-            return "Pointing";
+        bool isRightHand = (hand == rightHand);
+        var frameCounter = isRightHand ? pinchFrameCounterRight : pinchFrameCounterLeft;
 
         if (IsFistClosed(hand))
             return "Fist";
+
+        if (IsPinchB1(hand))
+        {
+            frameCounter["B1"] = frameCounter["B1"] + 1;
+            if (frameCounter["B1"] >= hysteresisFramesB1)
+                return "RingThumb";
+        }
+        else
+            frameCounter["B1"] = 0;
+
+        if (IsPinchB2(hand))
+        {
+            frameCounter["B2"] = frameCounter["B2"] + 1;
+            if (frameCounter["B2"] >= hysteresisFramesB2)
+                return "PinkyThumb";
+        }
+        else
+            frameCounter["B2"] = 0;
+
+        if (IsPointing(hand))
+            return "Pointing";
+            
+        if (IsPinchT2(hand))
+        {
+            frameCounter["T2"] = frameCounter["T2"] + 1;
+            if (frameCounter["T2"] >= hysteresisFramesT2)
+                return "MiddleThumb";
+        }
+        else
+            frameCounter["T2"] = 0;
+
+        // Verificar cada pinza con validación robusta
+        if (IsPinchT1(hand))
+        {
+            frameCounter["T1"] = frameCounter["T1"] + 1;
+            if (frameCounter["T1"] >= hysteresisFramesT1)
+                return "IndexThumb";
+        }
+        else
+            frameCounter["T1"] = 0;
 
         return null;
     }
@@ -282,11 +417,11 @@ public class GestureUIController : MonoBehaviour
             return false;
 
         // Si hay alguna pinza activa, no es puño
-        if (hand.GetFingerIsPinching(HandFinger.Index) ||
+       /* if (hand.GetFingerIsPinching(HandFinger.Index) ||
             hand.GetFingerIsPinching(HandFinger.Middle) ||
             hand.GetFingerIsPinching(HandFinger.Ring) ||
             hand.GetFingerIsPinching(HandFinger.Pinky))
-            return false;
+            return false;*/
 
         float indexStrength = hand.GetFingerPinchStrength(HandFinger.Index);
         float middleStrength = hand.GetFingerPinchStrength(HandFinger.Middle);
@@ -295,7 +430,7 @@ public class GestureUIController : MonoBehaviour
 
         // Usar promedio: más tolerante que requerir TODOS > threshold
         float averageStrength = (indexStrength + middleStrength + ringStrength + pinkyStrength) / 4f;
-        return averageStrength > 0.25f;
+        return averageStrength > 0.26f;
     }
 
     /// <summary>
@@ -310,12 +445,12 @@ public class GestureUIController : MonoBehaviour
             return false;
 
         // Si hay alguna pinza activa, no es pointing
-        if (hand.GetFingerIsPinching(HandFinger.Index) ||
+       /* if (hand.GetFingerIsPinching(HandFinger.Index) ||
             hand.GetFingerIsPinching(HandFinger.Middle) ||
             hand.GetFingerIsPinching(HandFinger.Ring) ||
             hand.GetFingerIsPinching(HandFinger.Pinky))
             return false;
-
+*/
         // El índice debe estar extendido (baja fuerza de pinch)
         // y otros dedos DEBEN estar más cerrados para distinguir de palma abierta
         float indexPinch = hand.GetFingerPinchStrength(HandFinger.Index);
