@@ -8,6 +8,19 @@ using UnityEngine.InputSystem.Controls;
 #endif
 #endif
 
+/// <summary>
+/// Tracks painting state for one hand independently
+/// </summary>
+public struct HandPaintState
+{
+    public Transform controller;
+    public int lastPx;          // Last paint position (for stroke continuity)
+    public int lastPy;          // Last paint position (for stroke continuity)
+    public int currentPx;       // Current raycast position (for preview cursor)
+    public int currentPy;       // Current raycast position (for preview cursor)
+    public bool isPainting;
+}
+
 public class Paint : MonoBehaviour
 {
     [Header("Pointer")]
@@ -16,6 +29,7 @@ public class Paint : MonoBehaviour
     
     private Transform rightControllerTransform;
     private Transform leftControllerTransform;
+    private GestureUIController gestureController;
 
     [Header("Brush")]
     public int brushSize = 16;
@@ -30,7 +44,9 @@ public class Paint : MonoBehaviour
     Texture2D previewTex;
     Texture2D sourceTex;
 
-    int lastDrawPx = -1, lastDrawPy = -1;
+    // Per-hand painting state for simultaneous dual-hand painting
+    HandPaintState leftHandState;
+    HandPaintState rightHandState;
 
     void Start()
     {
@@ -103,61 +119,129 @@ public class Paint : MonoBehaviour
             }
         }
         #endif
+
+        // Auto-detectar GestureUIController si no está asignado
+        if (gestureController == null)
+        {
+            gestureController = FindObjectOfType<GestureUIController>();
+            if (gestureController != null)
+            {
+                Debug.Log("✓ GestureUIController detectado automáticamente");
+            }
+        }
+
+        // Initialize per-hand painting states
+        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false };
+        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false };
+    }
+
+    /// <summary>
+    /// Determines if an XR controller device corresponds to the left hand (true) or right hand (false)
+    /// Uses device enumeration order: first XR controller = left, second+ = right
+    /// This approach is more reliable than name-based matching for generic device names
+    /// </summary>
+    bool IsLeftHandDevice(UnityEngine.InputSystem.XR.XRController device)
+    {
+        int xrControllerIndex = -1;
+        int xrControllerCount = 0;
+        
+        foreach (var dev in InputSystem.devices)
+        {
+            if (dev is UnityEngine.InputSystem.XR.XRController)
+            {
+                if (dev == device)
+                    xrControllerIndex = xrControllerCount;
+                xrControllerCount++;
+            }
+        }
+
+        // First XR device (index 0) = left hand, rest = right hand
+        return xrControllerIndex == 0;
     }
 
     void Update()
     {
         if (runtimeTex == null) return;
 
-        Transform activePointer = rightControllerTransform ?? leftControllerTransform ?? rayOrigin;
-        if (activePointer == null) return;
+        // Process both hands independently
+        ProcessHandPainting(ref leftHandState, false);
+        ProcessHandPainting(ref rightHandState, true);
 
-        Ray ray = new Ray(activePointer.position, activePointer.forward);
+        // Apply texture once after both hands finish
+        runtimeTex.Apply();
 
-        if (!GetRayHit(ray, out Vector2 uv))
+        // Update preview for both hands
+        if (previewEnabled)
+        {
+            UpdatePreviewBothHands();
+        }
+        else
         {
             ApplyRuntimeTextureToMaterial();
-            lastDrawPx = -1;
-            lastDrawPy = -1;
+        }
+    }
+
+    /// <summary>
+    /// Processes painting for one hand independently
+    /// Always performs raycast for preview cursor, draws strokes only when painting
+    /// </summary>
+    void ProcessHandPainting(ref HandPaintState handState, bool isRightHand)
+    {
+        if (handState.controller == null)
+        {
+            handState.currentPx = -1;
+            handState.currentPy = -1;
+            handState.lastPx = -1;
+            handState.lastPy = -1;
+            handState.isPainting = false;
+            return;
+        }
+
+        Ray ray = new Ray(handState.controller.position, handState.controller.forward);
+
+        // Always update current position from raycast (for preview cursor)
+        if (!GetRayHit(ray, out Vector2 uv))
+        {
+            handState.currentPx = -1;
+            handState.currentPy = -1;
+            handState.lastPx = -1;
+            handState.lastPy = -1;
+            handState.isPainting = false;
             return;
         }
 
         int px = Mathf.FloorToInt(uv.x * runtimeTex.width);
         int py = Mathf.FloorToInt(uv.y * runtimeTex.height);
 
-        if (previewEnabled)
-        {
-            UpdatePreview(px, py);
-        }
-        else
-        {
-            ApplyRuntimeTextureToMaterial();
-        }
+        // Update current position for preview (always)
+        handState.currentPx = px;
+        handState.currentPy = py;
 
-        if (IsPainting())
+        // Check if this hand is currently painting
+        bool isPaintingNow = isRightHand ? IsPaintingRight() : IsPaintingLeft();
+
+        if (isPaintingNow)
         {
-            if (lastDrawPx >= 0 && lastDrawPy >= 0 && (px != lastDrawPx || py != lastDrawPy))
+            // Draw stroke from last position to current position
+            if (handState.lastPx >= 0 && handState.lastPy >= 0 && (px != handState.lastPx || py != handState.lastPy))
             {
-                DrawStroke(runtimeTex, lastDrawPx, lastDrawPy, px, py, brushSize, brushColor);
+                DrawStroke(runtimeTex, handState.lastPx, handState.lastPy, px, py, brushSize, brushColor);
             }
             else
             {
                 DrawCircle(runtimeTex, px, py, brushSize, brushColor);
             }
             
-            runtimeTex.Apply();
-            lastDrawPx = px;
-            lastDrawPy = py;
-
-            if (previewEnabled)
-            {
-                UpdatePreview(px, py);
-            }
+            handState.lastPx = px;
+            handState.lastPy = py;
+            handState.isPainting = true;
         }
         else
         {
-            lastDrawPx = -1;
-            lastDrawPy = -1;
+            // Reset last position when not painting (but keep current for preview)
+            handState.lastPx = -1;
+            handState.lastPy = -1;
+            handState.isPainting = false;
         }
     }
 
@@ -199,8 +283,12 @@ public class Paint : MonoBehaviour
         return false;
     }
 
-    bool IsPainting()
+    bool IsPaintingRight()
     {
+        // Verificar si T1 (gesto pinza índice-pulgar) está activo en mano derecha
+        if (gestureController != null && gestureController.IsT1ActiveRight)
+            return true;
+
         #if ENABLE_LEGACY_INPUT_MANAGER
         if (Input.GetMouseButton(0) || Input.GetButton("Fire1") || Input.GetKey(paintKey))
             return true;
@@ -215,6 +303,10 @@ public class Paint : MonoBehaviour
         {
             if (dev is UnityEngine.InputSystem.XR.XRController xr)
             {
+                // Use device index matching instead of unreliable name filtering
+                if (IsLeftHandDevice(xr))
+                    continue; // This is left hand, skip it
+
                 var trigger = xr.TryGetChildControl<AxisControl>("trigger");
                 if (trigger != null && trigger.ReadValue() > 0.1f)
                     return true;
@@ -253,6 +345,109 @@ public class Paint : MonoBehaviour
         return false;
     }
 
+    bool IsPaintingLeft()
+    {
+        // Verificar si T1 (gesto pinza índice-pulgar) está activo en mano izquierda
+        if (gestureController != null && gestureController.IsT1ActiveLeft)
+            return true;
+
+        #if ENABLE_INPUT_SYSTEM
+        foreach (var dev in InputSystem.devices)
+        {
+            if (dev is UnityEngine.InputSystem.XR.XRController xr)
+            {
+                // Use device index matching instead of unreliable name filtering
+                if (!IsLeftHandDevice(xr))
+                    continue; // This is right hand, skip it
+
+                var trigger = xr.TryGetChildControl<AxisControl>("trigger");
+                if (trigger != null && trigger.ReadValue() > 0.1f)
+                    return true;
+
+                try
+                {
+                    var triggerBtn = xr.TryGetChildControl<ButtonControl>("trigger");
+                    if (triggerBtn != null && triggerBtn.isPressed)
+                        return true;
+                }
+                catch { }
+                
+                if (dev.name.Contains("Hand") || dev.name.Contains("hand"))
+                {
+                    float bestValue = 0f;
+                    string[] controlNames = { "select", "trigger", "grip", "pinch" };
+                    
+                    foreach (var controlName in controlNames)
+                    {
+                        try
+                        {
+                            var ctrl = xr.TryGetChildControl<AxisControl>(controlName);
+                            if (ctrl != null)
+                                bestValue = Mathf.Max(bestValue, ctrl.ReadValue());
+                        }
+                        catch { }
+                    }
+                    
+                    if (bestValue > 0.3f)
+                        return true;
+                }
+            }
+        }
+        #endif
+
+        return false;
+    }
+
+    // Backward compatibility wrapper - returns true if either hand is painting
+    bool IsPainting()
+    {
+        return IsPaintingLeft() || IsPaintingRight();
+    }
+
+    /// <summary>
+    /// Updates preview to show brush cursors for both hands simultaneously
+    /// Shows cursor even when not painting (based on raycast position)
+    /// </summary>
+    void UpdatePreviewBothHands()
+    {
+        try
+        {
+            Graphics.CopyTexture(runtimeTex, previewTex);
+        }
+        catch
+        {
+            previewTex.SetPixels(runtimeTex.GetPixels());
+        }
+
+        // Draw preview circle for left hand if it has a valid raycast position
+        if (leftHandState.currentPx >= 0 && leftHandState.currentPy >= 0)
+        {
+            DrawCircle(previewTex, leftHandState.currentPx, leftHandState.currentPy, brushSize, Color.white);
+        }
+
+        // Draw preview circle for right hand if it has a valid raycast position
+        if (rightHandState.currentPx >= 0 && rightHandState.currentPy >= 0)
+        {
+            DrawCircle(previewTex, rightHandState.currentPx, rightHandState.currentPy, brushSize, Color.white);
+        }
+
+        previewTex.Apply();
+        SetMaterialTexture(previewTex);
+
+        if (spriteRenderer != null && previewTex != null)
+        {
+            var orig = spriteRenderer.sprite;
+            if (orig != null)
+            {
+                Rect fullRect = new Rect(0, 0, previewTex.width, previewTex.height);
+                Vector2 pivotNorm = new Vector2(orig.pivot.x / orig.rect.width, orig.pivot.y / orig.rect.height);
+                var newSprite = Sprite.Create(previewTex, fullRect, pivotNorm, orig.pixelsPerUnit);
+                spriteRenderer.sprite = newSprite;
+            }
+        }
+    }
+
+    // Legacy method for backward compatibility
     void UpdatePreview(int px, int py)
     {
         try
