@@ -371,8 +371,8 @@ public class GestureUIController : MonoBehaviour
             frameCounter["B2"] = 0;
 
             
-        if (IsPointing(hand))
-            return "Pointing";
+        //if (IsPointing(hand))
+        //    return "Pointing";
 
         if (IsPinchT2(hand))
         {
@@ -420,7 +420,7 @@ public class GestureUIController : MonoBehaviour
 
         // Usar promedio: más tolerante que requerir TODOS > threshold
         float averageStrength = (indexStrength + middleStrength + ringStrength + pinkyStrength) / 4f;
-        return averageStrength > 0.26f;
+        return averageStrength > 0.32f;
     }
 
     /// <summary>
