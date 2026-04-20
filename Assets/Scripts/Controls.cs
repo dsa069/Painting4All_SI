@@ -108,29 +108,36 @@ public class GestureUIController : MonoBehaviour
 
     void Update()
     {
-        if (!ValidateHandTracking())
+        // Procesar mano DERECHA de forma independiente
+        if (rightHand != null && rightHand.IsTrackedDataValid)
         {
-            HideGestureCanvas();
-            return;
-        }
-
-        // Detectar gestos en AMBAS manos de forma independiente
-        string rightGesture = DetectActiveGesture(rightHand);
-        string leftGesture = DetectActiveGesture(leftHand);
-
-        // Mostrar o ocultar gestos de forma independiente
-        if (!string.IsNullOrEmpty(rightGesture))
-        {
-            ShowGestureForHand(rightGesture, rightHand, true);
+            string rightGesture = DetectActiveGesture(rightHand);
+            if (!string.IsNullOrEmpty(rightGesture))
+            {
+                ShowGestureForHand(rightGesture, rightHand, true);
+            }
+            else
+            {
+                HideGestureForHand(true);
+            }
         }
         else
         {
             HideGestureForHand(true);
         }
 
-        if (!string.IsNullOrEmpty(leftGesture))
+        // Procesar mano IZQUIERDA de forma independiente
+        if (leftHand != null && leftHand.IsTrackedDataValid)
         {
-            ShowGestureForHand(leftGesture, leftHand, false);
+            string leftGesture = DetectActiveGesture(leftHand);
+            if (!string.IsNullOrEmpty(leftGesture))
+            {
+                ShowGestureForHand(leftGesture, leftHand, false);
+            }
+            else
+            {
+                HideGestureForHand(false);
+            }
         }
         else
         {
@@ -162,14 +169,23 @@ public class GestureUIController : MonoBehaviour
             AutoDetectHands();
         }
 
-        if (leftHand == null || rightHand == null)
+        // Permitir funcionamiento independiente: solo error si NINGUNA mano se encuentra
+        if (leftHand == null && rightHand == null)
         {
             Debug.LogError("ERROR: No se pudieron encontrar referencias a manos IHand. " +
                 "Verifica que LeftHandAnchor y RightHandAnchor existan en la escena con componentes IHand.");
         }
+        else if (leftHand == null)
+        {
+            Debug.LogWarning("⚠ Mano izquierda no detectada. Solo funcionará la mano derecha.");
+        }
+        else if (rightHand == null)
+        {
+            Debug.LogWarning("⚠ Mano derecha no detectada. Solo funcionará la mano izquierda.");
+        }
         else
         {
-            Debug.Log("✓ Manos detectadas correctamente.");
+            Debug.Log("✓ Ambas manos detectadas correctamente.");
         }
     }
 
@@ -328,12 +344,11 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Valida que el tracking de manos sea válido
+    /// Valida que el tracking de una mano sea válido
     /// </summary>
-    private bool ValidateHandTracking()
+    private bool IsHandTracked(IHand hand)
     {
-        return leftHand != null && rightHand != null &&
-               leftHand.IsTrackedDataValid && rightHand.IsTrackedDataValid;
+        return hand != null && hand.IsTrackedDataValid;
     }
 
     /// <summary>
