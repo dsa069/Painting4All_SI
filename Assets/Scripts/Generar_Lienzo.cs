@@ -41,9 +41,10 @@ public class Generar_Lienzo : MonoBehaviour
 
     // Gesture detection
     private GestureUIController gestureController;
-    private float lastSpawnTime = -1f;
+    private bool wasB1ActiveLastFrame = false; // Para detectar transición de gesto (GetDown-like behavior)
+    private float lastB1SpawnTime = -1f; // Cooldown entre spawns por gesto
     [SerializeField]
-    private float gestureSpawnCooldown = 0.3f; // Tiempo mínimo entre spawns por gesto (en segundos)
+    private float b1SpawnCooldown = 2f; // Tiempo mínimo entre spawns por gesto B1 (en segundos)
 
     private void Start()
     {
@@ -119,16 +120,20 @@ public class Generar_Lienzo : MonoBehaviour
         }
 
         // Detectar gesto B1 (pinza anular-pulgar) para generar lienzo
-        if (gestureController != null && gestureController.IsB1Active())
+        // Solo spawna cuando B1 PASA a estar activo (transición de false a true) Y ha pasado el cooldown
+        // Esto previene múltiples spawns en gestos rápidos
+        bool isB1ActiveNow = gestureController != null && gestureController.IsB1Active();
+        if (isB1ActiveNow && !wasB1ActiveLastFrame)
         {
-            float timeSinceLastSpawn = Time.time - lastSpawnTime;
-            if (timeSinceLastSpawn >= gestureSpawnCooldown)
+            float timeSinceLastB1Spawn = Time.time - lastB1SpawnTime;
+            if (timeSinceLastB1Spawn >= b1SpawnCooldown)
             {
                 Debug.Log("🎨 Gesto B1 detectado → Generando lienzo...");
                 SpawnCanvas();
-                lastSpawnTime = Time.time;
+                lastB1SpawnTime = Time.time;
             }
         }
+        wasB1ActiveLastFrame = isB1ActiveNow;
 
         // Debug: Permitir spawn con teclas en Editor (para testing sin Quest)
         #if UNITY_EDITOR
