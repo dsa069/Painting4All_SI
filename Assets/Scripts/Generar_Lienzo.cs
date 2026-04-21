@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// CanvasSpawner - Sistema de instanciación dinámica de lienzos de pintura para Meta Quest 3
@@ -102,7 +103,8 @@ public class Generar_Lienzo : MonoBehaviour
 
         // Debug: Permitir spawn con teclas en Editor (para testing sin Quest)
         #if UNITY_EDITOR
-        if (Input.GetKeyDown(KeyCode.Y) || Input.GetKeyDown(KeyCode.Keypad7))
+        var keyboard = Keyboard.current;
+        if (keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.numpad7Key.wasPressedThisFrame))
         {
             Debug.Log("🎨 Tecla Y/7 presionada → Generando lienzo (Editor Mode)...");
             SpawnCanvas();
