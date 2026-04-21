@@ -39,6 +39,12 @@ public class Generar_Lienzo : MonoBehaviour
     private GameObject templateCanvas; // Referencia al lienzo existente en la escena (si no hay Prefab)
     private bool hasPrefab = false;
 
+    // Gesture detection
+    private GestureUIController gestureController;
+    private float lastSpawnTime = -1f;
+    [SerializeField]
+    private float gestureSpawnCooldown = 0.3f; // Tiempo mínimo entre spawns por gesto (en segundos)
+
     private void Start()
     {
         // Auto-detectar cámara principal
@@ -83,6 +89,17 @@ public class Generar_Lienzo : MonoBehaviour
             }
         }
 
+        // Auto-detectar GestureUIController
+        gestureController = FindObjectOfType<GestureUIController>();
+        if (gestureController != null)
+        {
+            Debug.Log("✓ GestureUIController detectado. Se puede generar lienzo con gesto B1.");
+        }
+        else
+        {
+            Debug.LogWarning("⚠ No se encontró GestureUIController. Solo funcionará generación por botones.");
+        }
+
         Debug.Log("✓ CanvasSpawner inicializado correctamente.");
     }
 
@@ -99,6 +116,18 @@ public class Generar_Lienzo : MonoBehaviour
         {
             Debug.Log("🎨 Botón B (derecho) presionado → Generando lienzo...");
             SpawnCanvas();
+        }
+
+        // Detectar gesto B1 (pinza anular-pulgar) para generar lienzo
+        if (gestureController != null && gestureController.IsB1Active())
+        {
+            float timeSinceLastSpawn = Time.time - lastSpawnTime;
+            if (timeSinceLastSpawn >= gestureSpawnCooldown)
+            {
+                Debug.Log("🎨 Gesto B1 detectado → Generando lienzo...");
+                SpawnCanvas();
+                lastSpawnTime = Time.time;
+            }
         }
 
         // Debug: Permitir spawn con teclas en Editor (para testing sin Quest)
