@@ -106,8 +106,9 @@ public class Generar_Lienzo : MonoBehaviour
 
     private void Update()
     {
-        // Detectar entrada de botones OVR
-        if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch))
+        // Detectar entrada de botones OVR - Solo Botón Y (izquierdo) y Botón B (derecho)
+        // Button.Two en mando izquierdo = Y | Button.Two en mando derecho = B
+        if (OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.LTouch))
         {
             Debug.Log("🎨 Botón Y (izquierdo) presionado → Generando lienzo...");
             SpawnCanvas();
