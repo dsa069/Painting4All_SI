@@ -35,6 +35,10 @@ public class Paint : MonoBehaviour
     public int brushSize = 16;
     public Color brushColor = Color.red;
     public bool previewEnabled = true;
+    
+    [Header("Canvas Boundaries")]
+    public float edgeMargin = 0.002f;  // Minimal margin (2-3 pixels) to prevent painting at extreme edges
+    public int pixelEdgeMargin = 2;  // Pixel margin from edges - prevents painting in edge pixels
 
     Renderer rend;
     SpriteRenderer spriteRenderer;
@@ -213,6 +217,18 @@ public class Paint : MonoBehaviour
         int px = Mathf.FloorToInt(uv.x * runtimeTex.width);
         int py = Mathf.FloorToInt(uv.y * runtimeTex.height);
 
+        // Validate that pixel is not in edge margin - reject if too close to edges
+        if (px < pixelEdgeMargin || px >= runtimeTex.width - pixelEdgeMargin ||
+            py < pixelEdgeMargin || py >= runtimeTex.height - pixelEdgeMargin)
+        {
+            handState.currentPx = -1;
+            handState.currentPy = -1;
+            handState.lastPx = -1;
+            handState.lastPy = -1;
+            handState.isPainting = false;
+            return;
+        }
+
         // Update current position for preview (always)
         handState.currentPx = px;
         handState.currentPy = py;
@@ -263,7 +279,11 @@ public class Paint : MonoBehaviour
                     Vector3 worldPoint = ray.GetPoint(t);
                     Vector2 uvCandidate = ComputeUVForSprite(worldPoint);
                     
-                    if (uvCandidate.x >= 0f && uvCandidate.x <= 1f && uvCandidate.y >= 0f && uvCandidate.y <= 1f)
+                    // Check if UV is within valid bounds and outside edge margin
+                    float minBound = edgeMargin;
+                    float maxBound = 1f - edgeMargin;
+                    if (uvCandidate.x >= minBound && uvCandidate.x <= maxBound && 
+                        uvCandidate.y >= minBound && uvCandidate.y <= maxBound)
                     {
                         uv = uvCandidate;
                         return true;
@@ -274,10 +294,21 @@ public class Paint : MonoBehaviour
 
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
+            // Only accept hits on this GameObject to prevent painting on other objects
+            if (hit.collider.gameObject != gameObject)
+                return false;
+                
             uv = hit.textureCoord;
             if (uv == Vector2.zero)
                 uv = ComputeUVFromHit(hit);
-            return true;
+            
+            // Check if UV is within valid bounds and outside edge margin
+            float minBound = edgeMargin;
+            float maxBound = 1f - edgeMargin;
+            if (uv.x >= minBound && uv.x <= maxBound && uv.y >= minBound && uv.y <= maxBound)
+            {
+                return true;
+            }
         }
 
         return false;
