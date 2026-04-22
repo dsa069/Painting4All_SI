@@ -12,15 +12,15 @@ using System.Linq;
 /// LÓGICA:
 /// 1. El usuario apunta al lienzo con un mando (Raycast desde el mando)
 /// 2. Al presionar y mantener el Grip Button (botón lateral), el lienzo se engancha al mando
-/// 3. Mientras se mantiene presionado, el lienzo sigue la posición Y rotación del mando en tiempo real
-/// 4. Al soltar el Grip Button, el lienzo se fija en su posición actual
+/// 3. Mientras se mantiene presionado, el lienzo sigue la posición del mando en tiempo real
+/// 4. El lienzo mantiene su rotación original (no rota con el mando)
+/// 5. Al soltar el Grip Button, el lienzo se fija en su posición actual
 /// 
 /// CARACTERÍSTICAS:
 /// - Ambas manos (izquierda y derecha) funcionan de forma independiente
 /// - Sistema de raycast para detectar si el mando apunta al lienzo
 /// - Suavizado de movimiento con Lerp para evitar jitter
-/// - Sincronización de rotación con el mando
-/// - Calibración automática de posición/rotación relativa al presionar Grip
+/// - Rotación fija: el lienzo siempre muestra el lado que estás agarrando (sin voltearse)
 /// 
 /// SETUP:
 /// 1. Agrega este script al lienzo (objeto con SpriteRenderer o Mesh)
@@ -46,7 +46,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
     [Header("=== MOVEMENT SMOOTHING ===")]
     [SerializeField] private float positionSpeed = 15f;            // Velocidad de movimiento en m/s (frame-rate independiente)
     [SerializeField] private float rotationSpeed = 720f;           // Velocidad de rotación en grados/s
-    [SerializeField] private float canvasDistanceFromController = 2f; // Distancia deseada del lienzo adelante del mando
+    [SerializeField] private float canvasDistanceFromController = 4f; // Distancia deseada del lienzo adelante del mando
     [SerializeField] private bool useSmoothing = true;             // Habilitar/deshabilitar suavizado
     
     [Header("=== MANO DOMINANTE (opcional) ===")]
@@ -69,6 +69,9 @@ public class Seleccionar_Lienzo : MonoBehaviour
     // === POSICIÓN/ROTACIÓN OBJETIVO SUAVIZADA ===
     private Vector3 targetPosition;
     private Quaternion targetRotation;
+    private Quaternion initialCanvasRotation; // Rotación inicial del lienzo al agarrarlo
+    private Quaternion initialControllerRotation; // Rotación inicial del controlador al agarrarlo
+    private bool isGrabbedFromBehind = false; // Flag para detectar si se agarra de atrás
 
     void Awake()
     {
@@ -269,8 +272,16 @@ public class Seleccionar_Lienzo : MonoBehaviour
         currentActiveHand = hand;
         justEngaged = true; // Flag para evitar movimiento en el primer frame
         
+        // Guardar rotaciones iniciales para mantener orientación relativa
+        initialCanvasRotation = transform.rotation;
+        initialControllerRotation = controller.rotation;
+        
+        // Detectar si se agarra de atrás: si el ángulo entre forward del mando y forward del lienzo es > 90 grados
+        float dotProduct = Vector3.Dot(controller.forward, transform.forward);
+        isGrabbedFromBehind = dotProduct < 0; // Si dot product es negativo, están mirando en direcciones opuestas
+        
         #if UNITY_EDITOR
-        Debug.Log($"[Seleccionar_Lienzo] ✓ Lienzo enganchado a mano {hand}");
+        Debug.Log($"[Seleccionar_Lienzo] ✓ Lienzo enganchado a mano {hand}, isGrabbedFromBehind: {isGrabbedFromBehind}");
         #endif
     }
 
@@ -313,8 +324,10 @@ public class Seleccionar_Lienzo : MonoBehaviour
         // Calcular posición objetivo: punto adelante del mando en dirección forward
         Vector3 newPosition = activeController.position + activeController.forward * canvasDistanceFromController;
         
-        // Rotación objetivo: seguir la rotación del mando
-        Quaternion newRotation = activeController.rotation;
+        // Rotación objetivo: mantener la rotación relativa inicial
+        // Calcular la diferencia de rotación desde que fue agarrado
+        Quaternion rotationDelta = activeController.rotation * Quaternion.Inverse(initialControllerRotation);
+        Quaternion newRotation = rotationDelta * initialCanvasRotation;
         
         // EN EL PRIMER FRAME DESPUÉS DE ENGANCHAR: no mover el lienzo, solo inicializar targets
         if (justEngaged)
@@ -356,6 +369,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
         }
         else
         {
+            // Sin suavizado: asignar directamente
             targetPosition = newPosition;
             targetRotation = newRotation;
         }
