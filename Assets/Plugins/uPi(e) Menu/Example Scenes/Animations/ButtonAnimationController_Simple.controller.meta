@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 398fa5ba83fcbfa4fb2e167b4bda6b77
+timeCreated: 1464553486
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 165634
+  packageName: uPI(e) Menu - Radial Menu FREE
+  packageVersion: 1.4.1
+  assetPath: Assets/Plugins/uPi(e) Menu/Example Scenes/Animations/ButtonAnimationController_Simple.controller
+  uploadId: 360129

@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: a29dd74878ae4dd4d94ab595fcd18aa6
+timeCreated: 1429302361
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 165634
+  packageName: uPI(e) Menu - Radial Menu FREE
+  packageVersion: 1.4.1
+  assetPath: Assets/Plugins/uPi(e) Menu/Example Scripts/PingMenuDemo.cs
+  uploadId: 360129

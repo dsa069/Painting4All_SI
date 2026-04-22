@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: e48bc85cf0779374a945ab44998ed073
+timeCreated: 1467363850
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 165634
+  packageName: uPI(e) Menu - Radial Menu FREE
+  packageVersion: 1.4.1
+  assetPath: Assets/Plugins/uPi(e) Menu/Example Scripts/CustomInputRaycast.cs
+  uploadId: 360129

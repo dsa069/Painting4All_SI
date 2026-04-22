@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 0c0dbaa36ebeb6f48b9937ff04ef7d30
+timeCreated: 1434555154
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 165634
+  packageName: uPI(e) Menu - Radial Menu FREE
+  packageVersion: 1.4.1
+  assetPath: Assets/Plugins/uPi(e) Menu/Example Scripts/InputSwitcher.cs
+  uploadId: 360129
