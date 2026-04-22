@@ -41,7 +41,6 @@ public class Seleccionar_Lienzo : MonoBehaviour
     
     [Header("=== GRIP DETECTION SETTINGS ===")]
     [SerializeField] private float gripPressThreshold = 0.5f;      // Valor analógico para considerar presionado
-    [SerializeField] private float gripReleaseThreshold = 0.1f;    // Valor analógico para considerar soltado (histéresis)
     
     [Header("=== RAYCAST SETTINGS ===")]
     [SerializeField] private float raycastMaxDistance = 100f;      // Distancia máxima del raycast
@@ -52,9 +51,6 @@ public class Seleccionar_Lienzo : MonoBehaviour
     [SerializeField] private float rotationSpeed = 720f;           // Velocidad de rotación en grados/s
     [SerializeField] private float canvasDistanceFromController = 4f; // Distancia deseada del lienzo adelante del mando
     [SerializeField] private bool useSmoothing = true;             // Habilitar/deshabilitar suavizado
-    
-    [Header("=== MANO DOMINANTE (opcional) ===")]
-    [SerializeField] private bool prioritizeLastPressedHand = true; // Si ambas presionan, última gana
     
     // === ESTADO DE GRIP (por mano) ===
     private bool gripPressedLeft = false;
@@ -363,7 +359,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
         
         Ray ray = new Ray(wristPose.position, wristPose.rotation * Vector3.forward);
         return IsRayHittingCanvas(ray);
-        
+
     }
 
     /// <summary>
