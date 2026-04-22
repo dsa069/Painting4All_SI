@@ -130,6 +130,7 @@ MonoBehaviour:
   raycastMaxDistance: 100
   positionSpeed: 15
   rotationSpeed: 720
+  canvasDistanceFromController: 4
   useSmoothing: 1
   prioritizeLastPressedHand: 1
 --- !u!65 &3173768937211050578
