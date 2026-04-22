@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
+using Oculus.Interaction.Input;
 using System.Linq;
 
 /// <summary>
@@ -34,6 +35,9 @@ public class Seleccionar_Lienzo : MonoBehaviour
     [Header("=== REFERENCIAS DE MANDOS (Auto-detectadas) ===")]
     private Transform leftControllerTransform;
     private Transform rightControllerTransform;
+    private GestureUIController gestureController;
+    private IHand leftHandTracking;
+    private IHand rightHandTracking;
     
     [Header("=== GRIP DETECTION SETTINGS ===")]
     [SerializeField] private float gripPressThreshold = 0.5f;      // Valor analógico para considerar presionado
@@ -57,6 +61,12 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private bool gripPressedRight = false;
     private bool lastGripPressedLeft = false;
     private bool lastGripPressedRight = false;
+
+    // === ESTADO DE T2 GESTURE (por mano) ===
+    private bool t2PressedLeft = false;
+    private bool t2PressedRight = false;
+    private bool lastT2PressedLeft = false;
+    private bool lastT2PressedRight = false;
     
     // === OFFSETS RELATIVOS (cacheados al presionar Grip) ===
     // Removidos: ahora usamos distancia fija adelante del mando
@@ -65,6 +75,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private enum ActiveHand { None, Left, Right }
     private ActiveHand currentActiveHand = ActiveHand.None;
     private bool justEngaged = false; // Flag para evitar salto en primer frame
+    private bool currentHandIsTracking = false; // Flag para distinguir si es control por tracking o Grip button
     
     // === POSICIÓN/ROTACIÓN OBJETIVO SUAVIZADA ===
     private Vector3 targetPosition;
@@ -77,6 +88,9 @@ public class Seleccionar_Lienzo : MonoBehaviour
     {
         // Auto-detectar mandos
         AutoDetectControllers();
+        
+        // Auto-detectar gesture controller
+        AutoDetectGestureController();
         
         // Obtener collider del lienzo
         canvasCollider = GetComponent<Collider>();
@@ -94,6 +108,9 @@ public class Seleccionar_Lienzo : MonoBehaviour
     {
         // Actualizar estado de grip en ambos mandos
         UpdateGripState();
+        
+        // Actualizar estado de T2 gesture en ambas manos
+        UpdateT2State();
         
         // Procesar enganches y desengaches
         ProcessGripTransitions();
@@ -131,6 +148,34 @@ public class Seleccionar_Lienzo : MonoBehaviour
         
         if (rightControllerTransform == null)
             Debug.LogWarning("[Seleccionar_Lienzo] No se encontró mando derecho (RightControllerAnchor)");
+    }
+
+    /// <summary>
+    /// Auto-detecta el controlador de gestos (Controls.cs / GestureUIController)
+    /// También obtiene referencias a las manos para tracking
+    /// </summary>
+    private void AutoDetectGestureController()
+    {
+        gestureController = FindObjectOfType<GestureUIController>();
+        
+        if (gestureController == null)
+        {
+            Debug.LogWarning("[Seleccionar_Lienzo] ⚠ No se encontró GestureUIController (Controls.cs). Hand tracking para T2 no funcionará.");
+            return;
+        }
+        
+        // Obtener referencias a las manos desde el gesture controller
+        leftHandTracking = gestureController.GetLeftHand();
+        rightHandTracking = gestureController.GetRightHand();
+        
+        if (leftHandTracking == null || rightHandTracking == null)
+        {
+            Debug.LogWarning("[Seleccionar_Lienzo] ⚠ No se pudieron obtener referencias de manos. Hand tracking para T2 no funcionará.");
+        }
+        else
+        {
+            Debug.Log("[Seleccionar_Lienzo] ✓ Hand tracking para T2 gesture iniciado correctamente.");
+        }
     }
 
     /// <summary>
@@ -194,47 +239,97 @@ public class Seleccionar_Lienzo : MonoBehaviour
     }
 
     /// <summary>
-    /// Detecta transiciones de Grip (presionado → soltado o soltado → presionado)
-    /// Engancha el lienzo cuando se presiona Grip sobre él
+    /// Lee el estado actual del gesto T2 (Thumb + Middle pinch) en ambas manos
+    /// Detecta si el gesture controller está disponible y si T2 está activo
+    /// </summary>
+    private void UpdateT2State()
+    {
+        t2PressedLeft = false;
+        t2PressedRight = false;
+        
+        // Si el gesture controller no está disponible, no hacer nada
+        if (gestureController == null)
+            return;
+        
+        // Detectar T2 en mano derecha
+        t2PressedRight = gestureController.IsT2ActiveRight;
+        
+        // Detectar T2 en mano izquierda
+        t2PressedLeft = gestureController.IsT2ActiveLeft;
+    }
+
+    /// <summary>
+    /// Detecta transiciones de Grip Button y T2 Gesture (presionado → soltado o soltado → presionado)
+    /// Engancha el lienzo cuando se presiona Grip o T2 sobre él
     /// Lo desenganche cuando se suelta
     /// </summary>
     private void ProcessGripTransitions()
     {
-        // TRANSICIÓN IZQUIERDA: soltado → presionado
+        // ========== TRANSICIONES GRIP BUTTON ==========
+        
+        // TRANSICIÓN IZQUIERDA GRIP: soltado → presionado
         if (gripPressedLeft && !lastGripPressedLeft)
         {
             if (RaycastFromController(leftControllerTransform))
             {
-                // Raycast éxitoso: enganchar lienzo con mano izquierda
-                EngageCanvas(ActiveHand.Left, leftControllerTransform);
+                // Raycast éxitoso: enganchar lienzo con mano izquierda (por Grip)
+                EngageCanvas(ActiveHand.Left, leftControllerTransform, false); // false = no es tracking
             }
         }
         
-        // TRANSICIÓN DERECHA: soltado → presionado
+        // TRANSICIÓN DERECHA GRIP: soltado → presionado
         if (gripPressedRight && !lastGripPressedRight)
         {
             if (RaycastFromController(rightControllerTransform))
             {
-                // Raycast éxitoso: enganchar lienzo con mano derecha
-                EngageCanvas(ActiveHand.Right, rightControllerTransform);
+                // Raycast éxitoso: enganchar lienzo con mano derecha (por Grip)
+                EngageCanvas(ActiveHand.Right, rightControllerTransform, false); // false = no es tracking
             }
         }
         
-        // LIBERACIÓN IZQUIERDA: presionado → soltado
-        if (!gripPressedLeft && lastGripPressedLeft && currentActiveHand == ActiveHand.Left)
+        // ========== TRANSICIONES T2 GESTURE ==========
+        
+        // TRANSICIÓN IZQUIERDA T2: soltado → presionado (REQUIERE raycast desde muñeca)
+        if (t2PressedLeft && !lastT2PressedLeft)
+        {
+            // T2 presionado: validar que estés apuntando a ESTE lienzo específicamente
+            if (leftHandTracking != null && RaycastFromHandWrist(leftHandTracking))
+            {
+                EngageCanvas(ActiveHand.Left, null, true); // true = es tracking
+            }
+        }
+        
+        // TRANSICIÓN DERECHA T2: soltado → presionado (REQUIERE raycast desde muñeca)
+        if (t2PressedRight && !lastT2PressedRight)
+        {
+            // T2 presionado: validar que estés apuntando a ESTE lienzo específicamente
+            if (rightHandTracking != null && RaycastFromHandWrist(rightHandTracking))
+            {
+                EngageCanvas(ActiveHand.Right, null, true); // true = es tracking
+            }
+        }
+        
+        // ========== LIBERACIONES ==========
+        
+        // LIBERACIÓN IZQUIERDA: presionado → soltado (tanto Grip como T2)
+        if ((!gripPressedLeft && lastGripPressedLeft || !t2PressedLeft && lastT2PressedLeft) && currentActiveHand == ActiveHand.Left)
         {
             DisengageCanvas();
         }
         
-        // LIBERACIÓN DERECHA: presionado → soltado
-        if (!gripPressedRight && lastGripPressedRight && currentActiveHand == ActiveHand.Right)
+        // LIBERACIÓN DERECHA: presionado → soltado (tanto Grip como T2)
+        if ((!gripPressedRight && lastGripPressedRight || !t2PressedRight && lastT2PressedRight) && currentActiveHand == ActiveHand.Right)
         {
             DisengageCanvas();
         }
         
-        // Guardar estado anterior
+        // Guardar estado anterior para GRIP
         lastGripPressedLeft = gripPressedLeft;
         lastGripPressedRight = gripPressedRight;
+        
+        // Guardar estado anterior para T2
+        lastT2PressedLeft = t2PressedLeft;
+        lastT2PressedRight = t2PressedRight;
     }
 
     /// <summary>
@@ -264,24 +359,82 @@ public class Seleccionar_Lienzo : MonoBehaviour
     }
 
     /// <summary>
-    /// Engancha el lienzo a un mando específico
-    /// El lienzo se moverá a una distancia fija adelante del mando en la dirección forward
+    /// Realiza un raycast desde la muñeca de la mano hacia el lienzo
+    /// Devuelve true si el raycast acierta el lienzo
+    /// Usado para validar T2 gesture - solo engancha si apuntas específicamente al lienzo
     /// </summary>
-    private void EngageCanvas(ActiveHand hand, Transform controller)
+    private bool RaycastFromHandWrist(IHand hand)
+    {
+        if (hand == null || canvasCollider == null || !hand.IsTrackedDataValid)
+            return false;
+        
+        // Obtener pose de la muñeca
+        if (!hand.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
+            return false;
+        
+        Ray ray = new Ray(wristPose.position, wristPose.rotation * Vector3.forward);
+        
+        // Debug visual (opcional: comentar si causa lag)
+        // Debug.DrawRay(ray.origin, ray.direction * raycastMaxDistance, Color.green, 0.016f);
+        
+        if (Physics.Raycast(ray, out RaycastHit hit, raycastMaxDistance))
+        {
+            // Verificar si el raycast golpeó este lienzo específicamente
+            if (hit.collider == canvasCollider || hit.collider.gameObject == gameObject)
+            {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /// <summary>
+    /// Engancha el lienzo a un mando específico
+    /// El lienzo se moverá a una distancia fija adelante del mando/mano en la dirección forward
+    /// isTracking: true si es por T2 gesture (hand tracking), false si es por Grip button
+    /// </summary>
+    private void EngageCanvas(ActiveHand hand, Transform controller, bool isTracking)
     {
         currentActiveHand = hand;
+        currentHandIsTracking = isTracking; // Guardar si es tracking o Grip
         justEngaged = true; // Flag para evitar movimiento en el primer frame
         
         // Guardar rotaciones iniciales para mantener orientación relativa
         initialCanvasRotation = transform.rotation;
-        initialControllerRotation = controller.rotation;
         
-        // Detectar si se agarra de atrás: si el ángulo entre forward del mando y forward del lienzo es > 90 grados
-        float dotProduct = Vector3.Dot(controller.forward, transform.forward);
-        isGrabbedFromBehind = dotProduct < 0; // Si dot product es negativo, están mirando en direcciones opuestas
+        if (!isTracking && controller != null)
+        {
+            // Para Grip: usar rotación del controller
+            initialControllerRotation = controller.rotation;
+            
+            // Detectar si se agarra de atrás: si el ángulo entre forward del mando y forward del lienzo es > 90 grados
+            float dotProduct = Vector3.Dot(controller.forward, transform.forward);
+            isGrabbedFromBehind = dotProduct < 0;
+        }
+        else if (isTracking && hand == ActiveHand.Left && leftHandTracking != null)
+        {
+            // Para T2 mano izquierda: usar rotación de la mano
+            if (leftHandTracking.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
+            {
+                initialControllerRotation = wristPose.rotation;
+                float dotProduct = Vector3.Dot(wristPose.rotation * Vector3.forward, transform.forward);
+                isGrabbedFromBehind = dotProduct < 0;
+            }
+        }
+        else if (isTracking && hand == ActiveHand.Right && rightHandTracking != null)
+        {
+            // Para T2 mano derecha: usar rotación de la mano
+            if (rightHandTracking.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
+            {
+                initialControllerRotation = wristPose.rotation;
+                float dotProduct = Vector3.Dot(wristPose.rotation * Vector3.forward, transform.forward);
+                isGrabbedFromBehind = dotProduct < 0;
+            }
+        }
         
         #if UNITY_EDITOR
-        Debug.Log($"[Seleccionar_Lienzo] ✓ Lienzo enganchado a mano {hand}, isGrabbedFromBehind: {isGrabbedFromBehind}");
+        Debug.Log($"[Seleccionar_Lienzo] ✓ Lienzo enganchado a mano {hand} ({(isTracking ? "T2 Tracking" : "Grip Button")}), isGrabbedFromBehind: {isGrabbedFromBehind}");
         #endif
     }
 
@@ -292,6 +445,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private void DisengageCanvas()
     {
         currentActiveHand = ActiveHand.None;
+        currentHandIsTracking = false;
         justEngaged = false;
         
         #if UNITY_EDITOR
@@ -300,33 +454,68 @@ public class Seleccionar_Lienzo : MonoBehaviour
     }
 
     /// <summary>
+    /// Obtiene la posición y rotación actuales de la mano activa
+    /// Devuelve true si se obtuvieron exitosamente, false si hay error
+    /// Retorna position y rotation por out parameters
+    /// </summary>
+    private bool GetActiveHandTransform(out Vector3 position, out Quaternion rotation)
+    {
+        position = Vector3.zero;
+        rotation = Quaternion.identity;
+        
+        if (currentActiveHand == ActiveHand.None)
+            return false;
+        
+        if (currentHandIsTracking)
+        {
+            // Usar hand tracking (T2 gesture)
+            IHand activeHand = (currentActiveHand == ActiveHand.Left) ? leftHandTracking : rightHandTracking;
+            
+            if (activeHand == null || !activeHand.IsTrackedDataValid)
+                return false;
+            
+            // Obtener pose de la muñeca
+            if (activeHand.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
+            {
+                position = wristPose.position;
+                rotation = wristPose.rotation;
+                return true;
+            }
+        }
+        else
+        {
+            // Usar controller (Grip button)
+            Transform controller = (currentActiveHand == ActiveHand.Left) ? leftControllerTransform : rightControllerTransform;
+            
+            if (controller == null)
+                return false;
+            
+            position = controller.position;
+            rotation = controller.rotation;
+            return true;
+        }
+        
+        return false;
+    }
+
+    /// <summary>
     /// Actualiza la posición y rotación del lienzo en tiempo real
-    /// El lienzo se mueve hacia un punto adelante del mando (en la dirección que apunta)
+    /// El lienzo se mueve hacia un punto adelante de la mano/mando (en la dirección que apunta)
     /// a una distancia fija configurable (canvasDistanceFromController)
+    /// Funciona tanto con Grip button como con T2 hand tracking
     /// </summary>
     private void UpdateCanvasMovement()
     {
-        Transform activeController = null;
-        
-        // Obtener mando activo
-        if (currentActiveHand == ActiveHand.Left && leftControllerTransform != null)
-        {
-            activeController = leftControllerTransform;
-        }
-        else if (currentActiveHand == ActiveHand.Right && rightControllerTransform != null)
-        {
-            activeController = rightControllerTransform;
-        }
-        
-        if (activeController == null)
+        // Obtener posición y rotación de la mano/mando activo
+        if (!GetActiveHandTransform(out Vector3 handPosition, out Quaternion handRotation))
             return;
         
-        // Calcular posición objetivo: punto adelante del mando en dirección forward
-        Vector3 newPosition = activeController.position + activeController.forward * canvasDistanceFromController;
+        // Calcular posición objetivo: punto adelante de la mano en dirección forward
+        Vector3 newPosition = handPosition + (handRotation * Vector3.forward) * canvasDistanceFromController;
         
         // Rotación objetivo: mantener la rotación relativa inicial
         // Calcular la diferencia de rotación desde que fue agarrado
-        Quaternion rotationDelta = activeController.rotation * Quaternion.Inverse(initialControllerRotation);
+        Quaternion rotationDelta = handRotation * Quaternion.Inverse(initialControllerRotation);
         Quaternion newRotation = rotationDelta * initialCanvasRotation;
         
         // EN EL PRIMER FRAME DESPUÉS DE ENGANCHAR: no mover el lienzo, solo inicializar targets
@@ -378,7 +567,8 @@ public class Seleccionar_Lienzo : MonoBehaviour
         #if UNITY_EDITOR
         if (Time.frameCount % 30 == 0) // Log cada 30 frames para no saturar console
         {
-            Debug.Log($"[Seleccionar_Lienzo] Controller: {activeController.position} | Forward: {activeController.forward} | NewPos: {newPosition} | TargetPos: {targetPosition} | ActualPos: {transform.position}");
+            string source = currentHandIsTracking ? "Hand Tracking (T2)" : "Controller (Grip)";
+            Debug.Log($"[Seleccionar_Lienzo] [{source}] Pos: {handPosition} | NewPos: {newPosition} | TargetPos: {targetPosition} | ActualPos: {transform.position}");
         }
         #endif
         
