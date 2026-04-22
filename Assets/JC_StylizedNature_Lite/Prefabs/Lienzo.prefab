@@ -128,8 +128,8 @@ MonoBehaviour:
   gripPressThreshold: 0.5
   gripReleaseThreshold: 0.1
   raycastMaxDistance: 100
-  positionSmoothingAlpha: 0.2
-  rotationSmoothingAlpha: 0.15
+  positionSpeed: 15
+  rotationSpeed: 720
   useSmoothing: 1
   prioritizeLastPressedHand: 1
 --- !u!65 &3173768937211050578
