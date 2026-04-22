@@ -4944,7 +4944,7 @@ MonoBehaviour:
   canvasPrefab: {fileID: 0}
   spawnDistance: 1.25
   forwardOffset: 0.1
-  b1SpawnCooldown: 2
+  b1ActionCooldown: 1.5
 --- !u!4 &637927901
 Transform:
   m_ObjectHideFlags: 0
