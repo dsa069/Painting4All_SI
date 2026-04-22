@@ -198,5 +198,6 @@ public class Generar_Lienzo : MonoBehaviour
         newCanvas.transform.position = spawnPosition;
         newCanvas.transform.LookAt(cameraPosition);
         newCanvas.name = $"Lienzo_{System.DateTime.Now:HH-mm-ss}";
+        
     }
 }
