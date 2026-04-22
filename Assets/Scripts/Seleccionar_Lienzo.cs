@@ -334,38 +334,27 @@ public class Seleccionar_Lienzo : MonoBehaviour
 
     /// <summary>
     /// Realiza un raycast desde el mando hacia el lienzo
-    /// Devuelve true si el raycast acierta el lienzo
+    /// Usa la misma lógica que Paint.cs: plane intersection para SpriteRenderer, luego Physics.Raycast
+    /// Devuelve true si el raycast acierta este lienzo específico
     /// </summary>
     private bool RaycastFromController(Transform controller)
     {
-        if (controller == null || canvasCollider == null)
+        if (controller == null)
             return false;
         
         Ray ray = new Ray(controller.position, controller.forward);
-        
-        // Debug visual (opcional: comentar si causa lag)
-        // Debug.DrawRay(ray.origin, ray.direction * raycastMaxDistance, Color.cyan, 0.016f);
-        
-        if (Physics.Raycast(ray, out RaycastHit hit, raycastMaxDistance))
-        {
-            // Verificar si el raycast golpeó este lienzo específicamente
-            if (hit.collider == canvasCollider || hit.collider.gameObject == gameObject)
-            {
-                return true;
-            }
-        }
-        
-        return false;
+        return IsRayHittingCanvas(ray);
     }
 
     /// <summary>
     /// Realiza un raycast desde la muñeca de la mano hacia el lienzo
-    /// Devuelve true si el raycast acierta el lienzo
+    /// Usa la misma lógica que Paint.cs: plane intersection para SpriteRenderer, luego Physics.Raycast
+    /// Devuelve true si el raycast acierta este lienzo específico
     /// Usado para validar T2 gesture - solo engancha si apuntas específicamente al lienzo
     /// </summary>
     private bool RaycastFromHandWrist(IHand hand)
     {
-        if (hand == null || canvasCollider == null || !hand.IsTrackedDataValid)
+        if (hand == null || !hand.IsTrackedDataValid)
             return false;
         
         // Obtener pose de la muñeca
@@ -373,16 +362,73 @@ public class Seleccionar_Lienzo : MonoBehaviour
             return false;
         
         Ray ray = new Ray(wristPose.position, wristPose.rotation * Vector3.forward);
+        return IsRayHittingCanvas(ray);
         
-        // Debug visual (opcional: comentar si causa lag)
-        // Debug.DrawRay(ray.origin, ray.direction * raycastMaxDistance, Color.green, 0.016f);
+    }
+
+    /// <summary>
+    /// Valida si un ray golpea este lienzo específico
+    /// Usa la misma lógica que Paint.cs para consistencia:
+    /// 1. Plane intersection para SpriteRenderer (más preciso)
+    /// 2. Physics.Raycast como fallback para otros renderers
+    /// </summary>
+    private bool IsRayHittingCanvas(Ray ray)
+    {
+        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
         
-        if (Physics.Raycast(ray, out RaycastHit hit, raycastMaxDistance))
+        // MÉTODO 1: Plane intersection para SpriteRenderer (igual que Paint.cs)
+        if (spriteRenderer != null && spriteRenderer.sprite != null)
         {
-            // Verificar si el raycast golpeó este lienzo específicamente
-            if (hit.collider == canvasCollider || hit.collider.gameObject == gameObject)
+            Vector3 planeNormal = spriteRenderer.transform.forward;
+            Vector3 planePoint = spriteRenderer.transform.position;
+            float denom = Vector3.Dot(planeNormal, ray.direction);
+            
+            // Si el denom es muy pequeño, el ray es casi paralelo al plano
+            if (Mathf.Abs(denom) > 1e-6f)
             {
-                return true;
+                float t = Vector3.Dot(planeNormal, planePoint - ray.origin) / denom;
+                
+                // Solo si el punto de intersección está adelante del ray origin
+                if (t >= 0f)
+                {
+                    Vector3 worldPoint = ray.GetPoint(t);
+                    
+                    // Convertir a coordenadas locales del sprite
+                    Vector3 localPoint = spriteRenderer.transform.InverseTransformPoint(worldPoint);
+                    Rect spriteRect = spriteRenderer.sprite.rect;
+                    Vector2 spritePivot = spriteRenderer.sprite.pivot;
+                    float ppu = spriteRenderer.sprite.pixelsPerUnit;
+                    
+                    // Calcular si está dentro de los bounds del sprite
+                    float spriteWidth = spriteRect.width / ppu;
+                    float spriteHeight = spriteRect.height / ppu;
+                    float pivotX = spritePivot.x / ppu;
+                    float pivotY = spritePivot.y / ppu;
+                    
+                    float minX = -pivotX;
+                    float maxX = spriteWidth - pivotX;
+                    float minY = -pivotY;
+                    float maxY = spriteHeight - pivotY;
+                    
+                    if (localPoint.x >= minX && localPoint.x <= maxX &&
+                        localPoint.y >= minY && localPoint.y <= maxY)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        // MÉTODO 2: Physics.Raycast como fallback para otros tipos de renderers
+        if (canvasCollider != null)
+        {
+            if (Physics.Raycast(ray, out RaycastHit hit, raycastMaxDistance))
+            {
+                // Verificar que el hit sea específicamente ESTE gameobject
+                if (hit.collider.gameObject == gameObject)
+                {
+                    return true;
+                }
             }
         }
         
