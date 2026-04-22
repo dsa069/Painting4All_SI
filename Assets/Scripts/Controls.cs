@@ -486,6 +486,59 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
+    /// Expone el estado de T2 (pinza middle-pulgar) en la mano derecha
+    /// Devuelve true si el gesto T2 está activo
+    /// </summary>
+    public bool IsT2ActiveRight
+    {
+        get
+        {
+            if (rightHand == null || !rightHand.IsTrackedDataValid)
+                return false;
+            return IsPinchT2(rightHand);
+        }
+    }
+
+    /// <summary>
+    /// Expone el estado de T2 (pinza middle-pulgar) en la mano izquierda
+    /// Devuelve true si el gesto T2 está activo
+    /// </summary>
+    public bool IsT2ActiveLeft
+    {
+        get
+        {
+            if (leftHand == null || !leftHand.IsTrackedDataValid)
+                return false;
+            return IsPinchT2(leftHand);
+        }
+    }
+
+    /// <summary>
+    /// Devuelve true si T2 está activo en CUALQUIER mano (izquierda o derecha)
+    /// Útil para activar acciones que deben dispararse con cualquier mano
+    /// </summary>
+    public bool IsT2Active()
+    {
+        return IsT2ActiveRight || IsT2ActiveLeft;
+    }
+
+    /// <summary>
+    /// Devuelve la mano izquierda (IHand) para acceso a pose data
+    /// </summary>
+    public IHand GetLeftHand()
+    {
+        return leftHand;
+    }
+
+    /// <summary>
+    /// Devuelve la mano derecha (IHand) para acceso a pose data
+    /// </summary>
+    public IHand GetRightHand()
+    {
+        return rightHand;
+    }
+
+    /// <summary>
     /// Detecta si todos los dedos están cerrados (puño cerrado)
     /// Usa promedio de fuerza de pinch para ser más tolerante con variaciones naturales
     /// NO se activa si hay alguna pinza en progreso
