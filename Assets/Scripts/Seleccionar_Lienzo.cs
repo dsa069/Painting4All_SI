@@ -199,6 +199,13 @@ public class Seleccionar_Lienzo : MonoBehaviour
                 // Determinar si es mano izquierda o derecha
                 bool isLeftHand = IsLeftHandDevice(xrController);
                 
+                #if UNITY_EDITOR
+                if (isGripPressed && Time.frameCount % 30 == 0) // Debug cada 30 frames si está presionado
+                {
+                    Debug.Log($"[Seleccionar_Lienzo] Grip detectado - Device: {xrController.name} | Path: {xrController.path} | IsLeft: {isLeftHand} | GripValue: {gripValue}");
+                }
+                #endif
+                
                 if (isLeftHand)
                 {
                     gripPressedLeft = isGripPressed;
@@ -213,10 +220,27 @@ public class Seleccionar_Lienzo : MonoBehaviour
     
     /// <summary>
     /// Determina si un XRController corresponde a la mano izquierda
-    /// Usa el orden de enumeración: primer device XR = izquierda, siguientes = derecha
+    /// Usa las características del device: si tiene InputDeviceCharacteristics.Left, es mano izquierda
     /// </summary>
     private bool IsLeftHandDevice(XRController device)
     {
+        // Intentar obtener características del device
+        if (device is XRController xrCtrl)
+        {
+            // Método 1: Usar el nombre del device (es lo más confiable en Meta Quest)
+            if (device.name.Contains("Left") || device.name.Contains("left"))
+                return true;
+            if (device.name.Contains("Right") || device.name.Contains("right"))
+                return false;
+            
+            // Método 2: Si el método 1 no funciona, buscar en el path del device
+            if (device.path.Contains("lefthand"))
+                return true;
+            if (device.path.Contains("righthand"))
+                return false;
+        }
+        
+        // Fallback: por defecto, si no puede determinar, asumir que es por orden de enumeración
         int xrControllerIndex = -1;
         int xrControllerCount = 0;
         
@@ -268,8 +292,12 @@ public class Seleccionar_Lienzo : MonoBehaviour
         {
             if (RaycastFromController(leftControllerTransform))
             {
-                // Raycast éxitoso: enganchar lienzo con mano izquierda (por Grip)
-                EngageCanvas(ActiveHand.Left, leftControllerTransform, false); // false = no es tracking
+                // Validar que la mano izquierda no esté ya agarrando otro lienzo
+                if (!CanvasGripManager.Instance.IsHandAlreadyGripping(CanvasGripManager.ActiveHand.Left))
+                {
+                    // Raycast éxitoso: enganchar lienzo con mano izquierda (por Grip)
+                    EngageCanvas(ActiveHand.Left, leftControllerTransform, false); // false = no es tracking
+                }
             }
         }
         
@@ -278,8 +306,12 @@ public class Seleccionar_Lienzo : MonoBehaviour
         {
             if (RaycastFromController(rightControllerTransform))
             {
-                // Raycast éxitoso: enganchar lienzo con mano derecha (por Grip)
-                EngageCanvas(ActiveHand.Right, rightControllerTransform, false); // false = no es tracking
+                // Validar que la mano derecha no esté ya agarrando otro lienzo
+                if (!CanvasGripManager.Instance.IsHandAlreadyGripping(CanvasGripManager.ActiveHand.Right))
+                {
+                    // Raycast éxitoso: enganchar lienzo con mano derecha (por Grip)
+                    EngageCanvas(ActiveHand.Right, rightControllerTransform, false); // false = no es tracking
+                }
             }
         }
         
@@ -291,7 +323,11 @@ public class Seleccionar_Lienzo : MonoBehaviour
             // T2 presionado: validar que estés apuntando a ESTE lienzo específicamente
             if (leftHandTracking != null && RaycastFromHandWrist(leftHandTracking))
             {
-                EngageCanvas(ActiveHand.Left, null, true); // true = es tracking
+                // Validar que la mano izquierda no esté ya agarrando otro lienzo
+                if (!CanvasGripManager.Instance.IsHandAlreadyGripping(CanvasGripManager.ActiveHand.Left))
+                {
+                    EngageCanvas(ActiveHand.Left, null, true); // true = es tracking
+                }
             }
         }
         
@@ -301,7 +337,11 @@ public class Seleccionar_Lienzo : MonoBehaviour
             // T2 presionado: validar que estés apuntando a ESTE lienzo específicamente
             if (rightHandTracking != null && RaycastFromHandWrist(rightHandTracking))
             {
-                EngageCanvas(ActiveHand.Right, null, true); // true = es tracking
+                // Validar que la mano derecha no esté ya agarrando otro lienzo
+                if (!CanvasGripManager.Instance.IsHandAlreadyGripping(CanvasGripManager.ActiveHand.Right))
+                {
+                    EngageCanvas(ActiveHand.Right, null, true); // true = es tracking
+                }
             }
         }
         
@@ -326,6 +366,14 @@ public class Seleccionar_Lienzo : MonoBehaviour
         // Guardar estado anterior para T2
         lastT2PressedLeft = t2PressedLeft;
         lastT2PressedRight = t2PressedRight;
+    }
+
+    /// <summary>
+    /// Convierte ActiveHand (enum local) a CanvasGripManager.ActiveHand para comunicación con el manager
+    /// </summary>
+    private CanvasGripManager.ActiveHand ConvertToManagerActiveHand(ActiveHand hand)
+    {
+        return hand == ActiveHand.Left ? CanvasGripManager.ActiveHand.Left : CanvasGripManager.ActiveHand.Right;
     }
 
     /// <summary>
@@ -438,6 +486,14 @@ public class Seleccionar_Lienzo : MonoBehaviour
     /// </summary>
     private void EngageCanvas(ActiveHand hand, Transform controller, bool isTracking)
     {
+        // Registrar en el manager global que esta mano está agarrando este lienzo
+        CanvasGripManager.ActiveHand managerHand = ConvertToManagerActiveHand(hand);
+        if (!CanvasGripManager.Instance.RegisterGrip(managerHand, this))
+        {
+            // Si no se pudo registrar (mano ya agarrando otro lienzo), cancelar enganche
+            return;
+        }
+        
         currentActiveHand = hand;
         currentHandIsTracking = isTracking; // Guardar si es tracking o Grip
         justEngaged = true; // Flag para evitar movimiento en el primer frame
@@ -486,6 +542,13 @@ public class Seleccionar_Lienzo : MonoBehaviour
     /// </summary>
     private void DisengageCanvas()
     {
+        // Desregistrar del manager global
+        if (currentActiveHand != ActiveHand.None)
+        {
+            CanvasGripManager.ActiveHand managerHand = ConvertToManagerActiveHand(currentActiveHand);
+            CanvasGripManager.Instance.UnregisterGrip(managerHand);
+        }
+        
         currentActiveHand = ActiveHand.None;
         currentHandIsTracking = false;
         justEngaged = false;
