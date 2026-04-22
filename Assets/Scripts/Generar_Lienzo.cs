@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.XR;
+using UnityEngine.InputSystem.Controls;
 
 /// <summary>
 /// CanvasSpawner - Sistema dinámico de lienzos para Meta Quest 3
@@ -69,7 +71,7 @@ public class Generar_Lienzo : MonoBehaviour
         }
 
         gestureController = FindObjectOfType<GestureUIController>();
-        Debug.Log("✓ CanvasSpawner (Creación/Borrado) inicializado.");
+        Debug.Log("✓ CanvasSpawner (Creación/Borrado) inicializado con Nuevo Input System.");
     }
 
     private void Update()
@@ -77,12 +79,23 @@ public class Generar_Lienzo : MonoBehaviour
         bool actionLeftTriggered = false;
         bool actionRightTriggered = false;
 
-        // 1. Detección de Botones OVR (Físicos)
-        if (OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.LTouch)) // Botón Y
-            actionLeftTriggered = true;
-            
-        if (OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.RTouch)) // Botón B
-            actionRightTriggered = true;
+        // 1. Detección de Botones (Físicos) - Usando el Nuevo Input System de Unity
+        foreach (var device in InputSystem.devices)
+        {
+            if (device is XRController xrController)
+            {
+                // En Meta Quest, el "secondaryButton" corresponde a la Y (Izquierda) y la B (Derecha)
+                var secondaryButton = xrController.TryGetChildControl<ButtonControl>("secondaryButton");
+                
+                if (secondaryButton != null && secondaryButton.wasPressedThisFrame)
+                {
+                    if (IsLeftHandDevice(xrController))
+                        actionLeftTriggered = true;
+                    else
+                        actionRightTriggered = true;
+                }
+            }
+        }
 
         // 2. Detección de Gestos B1 (Tracking) - Separado por manos
         if (gestureController != null)
@@ -108,7 +121,7 @@ public class Generar_Lienzo : MonoBehaviour
 
         // 3. Procesamiento de Lógica Condicional (Detección Cruzada)
         
-        // Si la acción provino de la mano IZQUIERDA
+        // Si la acción provino de la mano IZQUIERDA (Botón Y o Gesto B1)
         if (actionLeftTriggered)
         {
             // Validamos si la mano DERECHA está sujetando un lienzo
@@ -123,7 +136,7 @@ public class Generar_Lienzo : MonoBehaviour
             }
         }
 
-        // Si la acción provino de la mano DERECHA
+        // Si la acción provino de la mano DERECHA (Botón B o Gesto B1)
         if (actionRightTriggered)
         {
             // Validamos si la mano IZQUIERDA está sujetando un lienzo
@@ -154,6 +167,38 @@ public class Generar_Lienzo : MonoBehaviour
     }
 
     /// <summary>
+    /// Determina si un XRController corresponde a la mano izquierda
+    /// (Misma lógica probada que en Seleccionar_Lienzo.cs)
+    /// </summary>
+    private bool IsLeftHandDevice(XRController device)
+    {
+        if (device.name.Contains("Left") || device.name.Contains("left"))
+            return true;
+        if (device.name.Contains("Right") || device.name.Contains("right"))
+            return false;
+            
+        if (device.path.Contains("lefthand"))
+            return true;
+        if (device.path.Contains("righthand"))
+            return false;
+
+        // Fallback por enumeración
+        int xrControllerIndex = -1;
+        int xrControllerCount = 0;
+        
+        foreach (var dev in InputSystem.devices)
+        {
+            if (dev is XRController)
+            {
+                if (dev == device)
+                    xrControllerIndex = xrControllerCount;
+                xrControllerCount++;
+            }
+        }
+        return xrControllerIndex == 0;
+    }
+
+    /// <summary>
     /// Se encarga de destruir el lienzo de forma segura, eliminando las referencias en el Manager
     /// antes de destruir el GameObject para evitar NullReferenceExceptions.
     /// </summary>
@@ -164,11 +209,7 @@ public class Generar_Lienzo : MonoBehaviour
         if (canvasToDelete != null)
         {
             Debug.Log($"🗑️ Borrando lienzo sostenido por la mano {grippingHand}...");
-            
-            // ¡CRÍTICO! Desregistrar ANTES de destruir para limpiar el diccionario del Singleton
             CanvasGripManager.Instance.UnregisterGrip(grippingHand);
-            
-            // Destruir el objeto en la escena
             Destroy(canvasToDelete.gameObject);
         }
     }
@@ -198,6 +239,5 @@ public class Generar_Lienzo : MonoBehaviour
         newCanvas.transform.position = spawnPosition;
         newCanvas.transform.LookAt(cameraPosition);
         newCanvas.name = $"Lienzo_{System.DateTime.Now:HH-mm-ss}";
-        
     }
 }
