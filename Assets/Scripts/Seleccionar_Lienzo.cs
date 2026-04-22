@@ -44,8 +44,9 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private Collider canvasCollider;
     
     [Header("=== MOVEMENT SMOOTHING ===")]
-    [SerializeField] private float positionSmoothingAlpha = 0.2f;  // 0.2 = suavizado moderado (menor = más suave)
-    [SerializeField] private float rotationSmoothingAlpha = 0.15f; // 0.15 = suavizado más agresivo para rotación
+    [SerializeField] private float positionSpeed = 15f;            // Velocidad de movimiento en m/s (frame-rate independiente)
+    [SerializeField] private float rotationSpeed = 720f;           // Velocidad de rotación en grados/s
+    [SerializeField] private float canvasDistanceFromController = 2f; // Distancia deseada del lienzo adelante del mando
     [SerializeField] private bool useSmoothing = true;             // Habilitar/deshabilitar suavizado
     
     [Header("=== MANO DOMINANTE (opcional) ===")]
@@ -58,14 +59,12 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private bool lastGripPressedRight = false;
     
     // === OFFSETS RELATIVOS (cacheados al presionar Grip) ===
-    private Vector3 leftGripPositionOffset;
-    private Quaternion leftGripRotationOffset;
-    private Vector3 rightGripPositionOffset;
-    private Quaternion rightGripRotationOffset;
+    // Removidos: ahora usamos distancia fija adelante del mando
     
     // === MANO ACTUALMENTE ACTIVA ===
     private enum ActiveHand { None, Left, Right }
     private ActiveHand currentActiveHand = ActiveHand.None;
+    private bool justEngaged = false; // Flag para evitar salto en primer frame
     
     // === POSICIÓN/ROTACIÓN OBJETIVO SUAVIZADA ===
     private Vector3 targetPosition;
@@ -263,33 +262,12 @@ public class Seleccionar_Lienzo : MonoBehaviour
 
     /// <summary>
     /// Engancha el lienzo a un mando específico
-    /// Calcula y cachea los offsets relativos de posición y rotación
+    /// El lienzo se moverá a una distancia fija adelante del mando en la dirección forward
     /// </summary>
     private void EngageCanvas(ActiveHand hand, Transform controller)
     {
         currentActiveHand = hand;
-        
-        // Calcular offset relativo = diferencia entre posición del lienzo y del mando
-        Vector3 positionOffset = transform.position - controller.position;
-        
-        // Calcular offset de rotación = rotación relativa
-        Quaternion rotationOffset = transform.rotation * Quaternion.Inverse(controller.rotation);
-        
-        // Guardar offsets según la mano
-        if (hand == ActiveHand.Left)
-        {
-            leftGripPositionOffset = positionOffset;
-            leftGripRotationOffset = rotationOffset;
-        }
-        else if (hand == ActiveHand.Right)
-        {
-            rightGripPositionOffset = positionOffset;
-            rightGripRotationOffset = rotationOffset;
-        }
-        
-        // Inicializar posición/rotación objetivo
-        targetPosition = transform.position;
-        targetRotation = transform.rotation;
+        justEngaged = true; // Flag para evitar movimiento en el primer frame
         
         #if UNITY_EDITOR
         Debug.Log($"[Seleccionar_Lienzo] ✓ Lienzo enganchado a mano {hand}");
@@ -303,6 +281,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private void DisengageCanvas()
     {
         currentActiveHand = ActiveHand.None;
+        justEngaged = false;
         
         #if UNITY_EDITOR
         Debug.Log("[Seleccionar_Lienzo] ✓ Lienzo desenganchado");
@@ -311,47 +290,83 @@ public class Seleccionar_Lienzo : MonoBehaviour
 
     /// <summary>
     /// Actualiza la posición y rotación del lienzo en tiempo real
-    /// Sigue el mando manteniendo el offset relativo calculado al presionar Grip
-    /// Aplica suavizado con Lerp para evitar jitter
+    /// El lienzo se mueve hacia un punto adelante del mando (en la dirección que apunta)
+    /// a una distancia fija configurable (canvasDistanceFromController)
     /// </summary>
     private void UpdateCanvasMovement()
     {
         Transform activeController = null;
-        Vector3 positionOffset = Vector3.zero;
-        Quaternion rotationOffset = Quaternion.identity;
         
-        // Obtener offset según la mano activa
+        // Obtener mando activo
         if (currentActiveHand == ActiveHand.Left && leftControllerTransform != null)
         {
             activeController = leftControllerTransform;
-            positionOffset = leftGripPositionOffset;
-            rotationOffset = leftGripRotationOffset;
         }
         else if (currentActiveHand == ActiveHand.Right && rightControllerTransform != null)
         {
             activeController = rightControllerTransform;
-            positionOffset = rightGripPositionOffset;
-            rotationOffset = rightGripRotationOffset;
         }
         
         if (activeController == null)
             return;
         
-        // Calcular nueva posición y rotación basada en posición del mando
-        Vector3 newPosition = activeController.position + positionOffset;
-        Quaternion newRotation = activeController.rotation * rotationOffset;
+        // Calcular posición objetivo: punto adelante del mando en dirección forward
+        Vector3 newPosition = activeController.position + activeController.forward * canvasDistanceFromController;
         
-        // Aplicar suavizado si está habilitado
+        // Rotación objetivo: seguir la rotación del mando
+        Quaternion newRotation = activeController.rotation;
+        
+        // EN EL PRIMER FRAME DESPUÉS DE ENGANCHAR: no mover el lienzo, solo inicializar targets
+        if (justEngaged)
+        {
+            targetPosition = transform.position;
+            targetRotation = transform.rotation;
+            justEngaged = false; // Desactivar flag para frames posteriores
+            return; // NO mover el lienzo en este frame
+        }
+        
+        // EN FRAMES POSTERIORES: interpolar a velocidad constante (frame-rate independiente)
         if (useSmoothing)
         {
-            targetPosition = Vector3.Lerp(targetPosition, newPosition, positionSmoothingAlpha);
-            targetRotation = Quaternion.Lerp(targetRotation, newRotation, rotationSmoothingAlpha);
+            // POSICIÓN: Mover a velocidad constante basada en tiempo delta
+            float distanceToMove = Vector3.Distance(targetPosition, newPosition);
+            if (distanceToMove > 0.001f) // Evitar división por cero
+            {
+                float maxMovement = positionSpeed * Time.deltaTime;
+                float interpolationAmount = Mathf.Min(1f, maxMovement / distanceToMove);
+                targetPosition = Vector3.Lerp(targetPosition, newPosition, interpolationAmount);
+            }
+            else
+            {
+                targetPosition = newPosition;
+            }
+            
+            // ROTACIÓN: Rotar a velocidad constante basada en tiempo delta
+            float angleDifference = Quaternion.Angle(targetRotation, newRotation);
+            if (angleDifference > 0.01f) // Evitar cálculos innecesarios
+            {
+                float maxRotation = rotationSpeed * Time.deltaTime;
+                float rotationInterpolation = Mathf.Min(1f, maxRotation / angleDifference);
+                targetRotation = Quaternion.Lerp(targetRotation, newRotation, rotationInterpolation);
+            }
+            else
+            {
+                targetRotation = newRotation;
+            }
         }
         else
         {
             targetPosition = newPosition;
             targetRotation = newRotation;
         }
+        
+        // Debug: Ver qué está pasando con la posición
+        #if UNITY_EDITOR
+        if (Time.frameCount % 30 == 0) // Log cada 30 frames para no saturar console
+        {
+            Debug.Log($"[Seleccionar_Lienzo] Controller: {activeController.position} | Forward: {activeController.forward} | NewPos: {newPosition} | TargetPos: {targetPosition} | ActualPos: {transform.position}");
+        }
+        #endif
         
         // Aplicar transformación al lienzo
         transform.position = targetPosition;
