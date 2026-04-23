@@ -84,12 +84,12 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 21300000, guid: 29ae1ae8f093c3c4a848a8102996c83a, type: 3}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.70980394}
+  m_Sprite: {fileID: 21300000, guid: e695bb6decbeea74b899ebf4762e414e, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.50980395}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 11.6, y: 11.6}
+  m_Size: {x: 38.399998, y: 21.599998}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -126,13 +126,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Seleccionar_Lienzo
   gripPressThreshold: 0.5
-  gripReleaseThreshold: 0.1
   raycastMaxDistance: 100
   positionSpeed: 15
   rotationSpeed: 720
   canvasDistanceFromController: 4
   useSmoothing: 1
-  prioritizeLastPressedHand: 1
 --- !u!65 &3173768937211050578
 BoxCollider:
   m_ObjectHideFlags: 0

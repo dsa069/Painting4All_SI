@@ -453,13 +453,13 @@ public class Paint : MonoBehaviour
         // Draw preview circle for left hand if it has a valid raycast position
         if (leftHandState.currentPx >= 0 && leftHandState.currentPy >= 0)
         {
-            DrawCircle(previewTex, leftHandState.currentPx, leftHandState.currentPy, brushSize, Color.white);
+            DrawCircle(previewTex, leftHandState.currentPx, leftHandState.currentPy, brushSize, Color.yellow);
         }
 
         // Draw preview circle for right hand if it has a valid raycast position
         if (rightHandState.currentPx >= 0 && rightHandState.currentPy >= 0)
         {
-            DrawCircle(previewTex, rightHandState.currentPx, rightHandState.currentPy, brushSize, Color.white);
+            DrawCircle(previewTex, rightHandState.currentPx, rightHandState.currentPy, brushSize, Color.yellow);
         }
 
         previewTex.Apply();
@@ -490,7 +490,7 @@ public class Paint : MonoBehaviour
             previewTex.SetPixels(runtimeTex.GetPixels());
         }
 
-        DrawCircle(previewTex, px, py, brushSize, Color.white);
+        DrawCircle(previewTex, px, py, brushSize, Color.yellow);
         previewTex.Apply();
         SetMaterialTexture(previewTex);
 
