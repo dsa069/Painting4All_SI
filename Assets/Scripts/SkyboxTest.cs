@@ -10,7 +10,7 @@ public class SkyboxTest : MonoBehaviour
         if (dayAndNight != null)
         {
             // Llamamos a una de las funciones para probar
-            dayAndNight.SetNight();
+            dayAndNight.SetDay();
         }
         else
         {
