@@ -19,7 +19,14 @@ public class Menu : MonoBehaviour
 	[SerializeField]
 	private Vector3 instantiatedMenuScale = new Vector3(0.015f, 0.015f, 0.015f);
 
+	[SerializeField]
+	private float menuHeightAboveController = 0.18f;
+
+	[SerializeField]
+	private float menuForwardOffsetFromController = 0.08f;
+
 	private GameObject menuGeneralInstance;
+	private OVRInput.Controller lastMenuController = OVRInput.Controller.None;
 
 	private void Start()
 	{
@@ -49,9 +56,16 @@ public class Menu : MonoBehaviour
 		bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // X
 		bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // A
 
-		if (xPressed || aPressed)
+		if (xPressed)
 		{
-			Debug.Log($"Menu: input detectado -> X={xPressed}, A={aPressed}");
+			lastMenuController = OVRInput.Controller.LTouch;
+			Debug.Log("Menu: input detectado -> X=true, A=false");
+			ToggleMenu();
+		}
+		else if (aPressed)
+		{
+			lastMenuController = OVRInput.Controller.RTouch;
+			Debug.Log("Menu: input detectado -> X=false, A=true");
 			ToggleMenu();
 		}
 	}
@@ -74,7 +88,10 @@ public class Menu : MonoBehaviour
 
 		if (newState)
 		{
-			PositionMenuInFrontOfUser();
+			if (!PositionMenuAboveOpeningController())
+			{
+				PositionMenuInFrontOfUser();
+			}
 		}
 
 		Debug.Log(newState
@@ -127,5 +144,87 @@ public class Menu : MonoBehaviour
 		{
 			menuTransform.rotation = Quaternion.LookRotation(directionToCamera, Vector3.up);
 		}
+	}
+
+	private bool PositionMenuAboveOpeningController()
+	{
+		if (menuGeneralInstance == null)
+		{
+			return false;
+		}
+
+		if (lastMenuController != OVRInput.Controller.LTouch && lastMenuController != OVRInput.Controller.RTouch)
+		{
+			return false;
+		}
+
+		if (!TryGetControllerWorldPose(lastMenuController, out Vector3 controllerPosition, out Quaternion _))
+		{
+			Debug.LogWarning("Menu: no se pudo obtener la pose del mando, usando posicion frente al usuario.");
+			return false;
+		}
+
+		Transform menuTransform = menuGeneralInstance.transform;
+		Vector3 targetPosition = controllerPosition + Vector3.up * menuHeightAboveController;
+
+		Camera mainCamera = Camera.main;
+		if (mainCamera != null)
+		{
+			targetPosition += mainCamera.transform.forward * menuForwardOffsetFromController;
+		}
+
+		menuTransform.position = targetPosition;
+
+		if (mainCamera != null)
+		{
+			Vector3 directionToCamera = mainCamera.transform.position - targetPosition;
+			directionToCamera.y = 0f;
+
+			if (directionToCamera.sqrMagnitude > 0.001f)
+			{
+				menuTransform.rotation = Quaternion.LookRotation(directionToCamera, Vector3.up);
+			}
+		}
+
+		return true;
+	}
+
+	private bool TryGetControllerWorldPose(OVRInput.Controller controller, out Vector3 worldPosition, out Quaternion worldRotation)
+	{
+		OVRCameraRig cameraRig = FindObjectOfType<OVRCameraRig>();
+
+		if (cameraRig != null)
+		{
+			Transform anchor = controller == OVRInput.Controller.LTouch ? cameraRig.leftHandAnchor : cameraRig.rightHandAnchor;
+			if (anchor != null)
+			{
+				worldPosition = anchor.position;
+				worldRotation = anchor.rotation;
+				return true;
+			}
+		}
+
+		Vector3 localPosition = OVRInput.GetLocalControllerPosition(controller);
+		Quaternion localRotation = OVRInput.GetLocalControllerRotation(controller);
+
+		Transform trackingSpace = cameraRig != null ? cameraRig.trackingSpace : null;
+		if (trackingSpace != null)
+		{
+			worldPosition = trackingSpace.TransformPoint(localPosition);
+			worldRotation = trackingSpace.rotation * localRotation;
+			return true;
+		}
+
+		Camera mainCamera = Camera.main;
+		if (mainCamera != null)
+		{
+			worldPosition = mainCamera.transform.TransformPoint(localPosition);
+			worldRotation = mainCamera.transform.rotation * localRotation;
+			return true;
+		}
+
+		worldPosition = Vector3.zero;
+		worldRotation = Quaternion.identity;
+		return false;
 	}
 }
