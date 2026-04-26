@@ -36,7 +36,6 @@ public class Menu : MonoBehaviour
 	private void Start()
 	{
 		ResolveMenuReference();
-		InitializeMenuGraphics();
 
 		if (menuGeneralInstance == null)
 		{
@@ -166,18 +165,36 @@ public class Menu : MonoBehaviour
 			return;
 		}
 
-		menuGraphicRaycaster = menuGeneralInstance.GetComponentInChildren<GraphicRaycaster>();
-		eventSystem = EventSystem.current ?? FindObjectOfType<EventSystem>();
+		menuGraphicRaycaster = menuGeneralInstance.GetComponent<GraphicRaycaster>();
+		if (menuGraphicRaycaster == null)
+		{
+			Debug.LogWarning("Menu: GraphicRaycaster no encontrado en Menu_General.");
+		}
+
+		eventSystem = EventSystem.current;
+		if (eventSystem == null)
+		{
+			eventSystem = FindObjectOfType<EventSystem>();
+		}
 
 		if (eventSystem == null)
 		{
-			Debug.LogWarning("Menu: no se encontró EventSystem en la escena.");
+			Debug.LogWarning("Menu: no se encontró EventSystem en la escena. Creando uno nuevo...");
+			eventSystem = CreateEventSystem();
 		}
 
 		if (menuGeneralInstance.GetComponent<MenuButtonHandler>() == null)
 		{
 			menuGeneralInstance.AddComponent<MenuButtonHandler>();
 		}
+	}
+
+	private EventSystem CreateEventSystem()
+	{
+		GameObject eventSystemGO = new GameObject("EventSystem");
+		eventSystemGO.AddComponent<EventSystem>();
+		eventSystemGO.AddComponent<StandaloneInputModule>();
+		return eventSystemGO.GetComponent<EventSystem>();
 	}
 
 	private void HandleMenuTriggerInteraction()
@@ -204,14 +221,8 @@ public class Menu : MonoBehaviour
 
 	private void OnMenuTriggerPressed(OVRInput.Controller interactController)
 	{
-		if (menuGraphicRaycaster == null)
+		if (menuGeneralInstance == null)
 		{
-			RefreshMenuReferences();
-		}
-
-		if (menuGraphicRaycaster == null || eventSystem == null)
-		{
-			Debug.LogWarning("Menu: falta GraphicRaycaster o EventSystem para interactuar con la UI.");
 			return;
 		}
 
@@ -225,15 +236,14 @@ public class Menu : MonoBehaviour
 		if (RaycastMenuButton(ray, out Button hitButton))
 		{
 			hitButton.onClick.Invoke();
-			Debug.Log($"Menu: trigger del {interactController} activó {hitButton.gameObject.name}.");
 		}
 	}
 
 	private bool RaycastMenuButton(Ray ray, out Button hitButton)
 	{
 		hitButton = null;
-		Camera mainCamera = Camera.main;
-		if (mainCamera == null)
+
+		if (menuGeneralInstance == null)
 		{
 			return false;
 		}
@@ -244,34 +254,45 @@ public class Menu : MonoBehaviour
 			return false;
 		}
 
-		Plane menuPlane = new Plane(menuRect.forward, menuRect.position);
-		if (!menuPlane.Raycast(ray, out float enter))
+		Vector3 menuForward = menuRect.forward;
+		Vector3 menuPosition = menuRect.position;
+		float denom = Vector3.Dot(menuForward, ray.direction);
+
+		if (Mathf.Abs(denom) > 1e-6f)
 		{
-			return false;
-		}
-
-		Vector3 worldHit = ray.GetPoint(enter);
-		Vector3 screenPoint = mainCamera.WorldToScreenPoint(worldHit);
-
-		PointerEventData pointerData = new PointerEventData(eventSystem)
-		{
-			position = screenPoint
-		};
-
-		System.Collections.Generic.List<RaycastResult> results = new System.Collections.Generic.List<RaycastResult>();
-		menuGraphicRaycaster.Raycast(pointerData, results);
-
-		foreach (RaycastResult result in results)
-		{
-			if (result.gameObject == null)
+			float t = Vector3.Dot(menuForward, menuPosition - ray.origin) / denom;
+			if (t >= 0f)
 			{
-				continue;
-			}
+				Vector3 worldHit = ray.GetPoint(t);
+				Vector2 localPoint;
+				if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+					menuRect, worldHit, null, out localPoint))
+				{
+					Button[] buttons = menuGeneralInstance.GetComponentsInChildren<Button>();
+					foreach (Button button in buttons)
+					{
+						RectTransform buttonRect = button.GetComponent<RectTransform>();
+						if (buttonRect == null)
+						{
+							continue;
+						}
 
-			if (result.gameObject.TryGetComponent<Button>(out Button button))
-			{
-				hitButton = button;
-				return true;
+						Vector2 anchoredPosition = buttonRect.anchoredPosition;
+						Vector2 size = buttonRect.sizeDelta;
+
+						float halfWidth = size.x * 0.5f;
+						float halfHeight = size.y * 0.5f;
+
+						if (localPoint.x >= anchoredPosition.x - halfWidth &&
+							localPoint.x <= anchoredPosition.x + halfWidth &&
+							localPoint.y >= anchoredPosition.y - halfHeight &&
+							localPoint.y <= anchoredPosition.y + halfHeight)
+						{
+							hitButton = button;
+							return true;
+						}
+					}
+				}
 			}
 		}
 
