@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 public class Menu : MonoBehaviour
 {
@@ -27,10 +29,14 @@ public class Menu : MonoBehaviour
 
 	private GameObject menuGeneralInstance;
 	private OVRInput.Controller lastMenuController = OVRInput.Controller.None;
+	private GraphicRaycaster menuGraphicRaycaster;
+	private EventSystem eventSystem;
+	private bool wasTriggerPressed = false;
 
 	private void Start()
 	{
 		ResolveMenuReference();
+		InitializeMenuGraphics();
 
 		if (menuGeneralInstance == null)
 		{
@@ -68,6 +74,8 @@ public class Menu : MonoBehaviour
 			Debug.Log("Menu: input detectado -> X=false, A=true");
 			ToggleMenu();
 		}
+
+		HandleMenuTriggerInteraction();
 	}
 
 	private void ToggleMenu()
@@ -88,10 +96,15 @@ public class Menu : MonoBehaviour
 
 		if (newState)
 		{
+			RefreshMenuReferences();
 			if (!PositionMenuAboveOpeningController())
 			{
 				PositionMenuInFrontOfUser();
 			}
+		}
+		else
+		{
+			wasTriggerPressed = false;
 		}
 
 		Debug.Log(newState
@@ -144,6 +157,140 @@ public class Menu : MonoBehaviour
 		{
 			menuTransform.rotation = Quaternion.LookRotation(directionToCamera, Vector3.up);
 		}
+	}
+
+	private void RefreshMenuReferences()
+	{
+		if (menuGeneralInstance == null)
+		{
+			return;
+		}
+
+		menuGraphicRaycaster = menuGeneralInstance.GetComponentInChildren<GraphicRaycaster>();
+		eventSystem = EventSystem.current ?? FindObjectOfType<EventSystem>();
+
+		if (eventSystem == null)
+		{
+			Debug.LogWarning("Menu: no se encontró EventSystem en la escena.");
+		}
+
+		if (menuGeneralInstance.GetComponent<MenuButtonHandler>() == null)
+		{
+			menuGeneralInstance.AddComponent<MenuButtonHandler>();
+		}
+	}
+
+	private void HandleMenuTriggerInteraction()
+	{
+		if (menuGeneralInstance == null || !menuGeneralInstance.activeSelf)
+		{
+			return;
+		}
+
+		OVRInput.Controller interactController = GetOppositeController(lastMenuController);
+		if (interactController == OVRInput.Controller.None)
+		{
+			return;
+		}
+
+		bool triggerPressed = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, interactController);
+		if (triggerPressed && !wasTriggerPressed)
+		{
+			OnMenuTriggerPressed(interactController);
+		}
+
+		wasTriggerPressed = triggerPressed;
+	}
+
+	private void OnMenuTriggerPressed(OVRInput.Controller interactController)
+	{
+		if (menuGraphicRaycaster == null)
+		{
+			RefreshMenuReferences();
+		}
+
+		if (menuGraphicRaycaster == null || eventSystem == null)
+		{
+			Debug.LogWarning("Menu: falta GraphicRaycaster o EventSystem para interactuar con la UI.");
+			return;
+		}
+
+		if (!TryGetControllerWorldPose(interactController, out Vector3 controllerPosition, out Quaternion controllerRotation))
+		{
+			Debug.LogWarning("Menu: no se pudo obtener la pose del mando interactivo.");
+			return;
+		}
+
+		Ray ray = new Ray(controllerPosition, controllerRotation * Vector3.forward);
+		if (RaycastMenuButton(ray, out Button hitButton))
+		{
+			hitButton.onClick.Invoke();
+			Debug.Log($"Menu: trigger del {interactController} activó {hitButton.gameObject.name}.");
+		}
+	}
+
+	private bool RaycastMenuButton(Ray ray, out Button hitButton)
+	{
+		hitButton = null;
+		Camera mainCamera = Camera.main;
+		if (mainCamera == null)
+		{
+			return false;
+		}
+
+		RectTransform menuRect = menuGeneralInstance.GetComponent<RectTransform>();
+		if (menuRect == null)
+		{
+			return false;
+		}
+
+		Plane menuPlane = new Plane(menuRect.forward, menuRect.position);
+		if (!menuPlane.Raycast(ray, out float enter))
+		{
+			return false;
+		}
+
+		Vector3 worldHit = ray.GetPoint(enter);
+		Vector3 screenPoint = mainCamera.WorldToScreenPoint(worldHit);
+
+		PointerEventData pointerData = new PointerEventData(eventSystem)
+		{
+			position = screenPoint
+		};
+
+		System.Collections.Generic.List<RaycastResult> results = new System.Collections.Generic.List<RaycastResult>();
+		menuGraphicRaycaster.Raycast(pointerData, results);
+
+		foreach (RaycastResult result in results)
+		{
+			if (result.gameObject == null)
+			{
+				continue;
+			}
+
+			if (result.gameObject.TryGetComponent<Button>(out Button button))
+			{
+				hitButton = button;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private OVRInput.Controller GetOppositeController(OVRInput.Controller controller)
+	{
+		if (controller == OVRInput.Controller.LTouch)
+		{
+			return OVRInput.Controller.RTouch;
+		}
+
+		if (controller == OVRInput.Controller.RTouch)
+		{
+			return OVRInput.Controller.LTouch;
+		}
+
+		return OVRInput.Controller.None;
 	}
 
 	private bool PositionMenuAboveOpeningController()
