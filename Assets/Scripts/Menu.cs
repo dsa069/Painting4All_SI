@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem.UI;
+#endif
 
 public class Menu : MonoBehaviour
 {
@@ -193,7 +196,11 @@ public class Menu : MonoBehaviour
 	{
 		GameObject eventSystemGO = new GameObject("EventSystem");
 		eventSystemGO.AddComponent<EventSystem>();
+		#if ENABLE_INPUT_SYSTEM
+		eventSystemGO.AddComponent<InputSystemUIInputModule>();
+		#else
 		eventSystemGO.AddComponent<StandaloneInputModule>();
+		#endif
 		return eventSystemGO.GetComponent<EventSystem>();
 	}
 
