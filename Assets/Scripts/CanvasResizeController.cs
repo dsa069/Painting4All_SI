@@ -19,8 +19,8 @@ public class CanvasResizeController : MonoBehaviour
     [SerializeField] private float smoothSpeed = 18f;
 
     [Header("Handle Collider")]
-    [SerializeField] private Vector2 handleSizeLocal = new Vector2(0.06f, 0.06f);
-    [SerializeField] private float handleDepthLocal = 0.03f;
+    [SerializeField] private Vector2 handleSizeLocal = new Vector2(10f, 10f);
+    [SerializeField] private float handleDepthLocal = 10f;
 
     private Transform leftControllerTransform;
     private Transform rightControllerTransform;
@@ -256,6 +256,23 @@ public class CanvasResizeController : MonoBehaviour
 
         targetScale = transform.localScale;
         isResizing = true;
+
+        string handleFamily = IsCorner(kind) ? "esquina" : "borde";
+        Debug.Log($"[CanvasResize] Agarre detectado en {handleFamily}: {kind}");
+    }
+
+    private bool IsCorner(CanvasResizeHandleKind kind)
+    {
+        switch (kind)
+        {
+            case CanvasResizeHandleKind.CornerTopLeft:
+            case CanvasResizeHandleKind.CornerTopRight:
+            case CanvasResizeHandleKind.CornerBottomLeft:
+            case CanvasResizeHandleKind.CornerBottomRight:
+                return true;
+            default:
+                return false;
+        }
     }
 
     private void UpdateResize()
