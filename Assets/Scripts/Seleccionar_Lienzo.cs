@@ -94,6 +94,11 @@ public class Seleccionar_Lienzo : MonoBehaviour
         {
             Debug.LogError($"[Seleccionar_Lienzo] El objeto '{gameObject.name}' no tiene Collider. Agrega un Box Collider o Mesh Collider.", gameObject);
         }
+
+        if (GetComponent<CanvasResizeController>() == null)
+        {
+            gameObject.AddComponent<CanvasResizeController>();
+        }
         
         // Inicializar posición/rotación objetivo
         targetPosition = transform.position;

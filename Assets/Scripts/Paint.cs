@@ -316,6 +316,9 @@ public class Paint : MonoBehaviour
 
     bool IsPaintingRight()
     {
+        if (CanvasGripManager.Instance.IsPaintBlockedByGrip(CanvasGripManager.ActiveHand.Right))
+            return false;
+
         // Verificar si T1 (gesto pinza índice-pulgar) está activo en mano derecha
         if (gestureController != null && gestureController.IsT1ActiveRight)
             return true;
@@ -378,6 +381,9 @@ public class Paint : MonoBehaviour
 
     bool IsPaintingLeft()
     {
+        if (CanvasGripManager.Instance.IsPaintBlockedByGrip(CanvasGripManager.ActiveHand.Left))
+            return false;
+
         // Verificar si T1 (gesto pinza índice-pulgar) está activo en mano izquierda
         if (gestureController != null && gestureController.IsT1ActiveLeft)
             return true;
