@@ -22,6 +22,19 @@ public class Menu : MonoBehaviour
 	private GameObject menuGeneralInstance;
 	private GameObject menuEntornoInstance;
 
+	public GameObject ActiveMenuInstance
+	{
+		get
+		{
+			// Returns the currently active menu instance
+			if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+				return menuGeneralInstance;
+			if (menuEntornoInstance != null && menuEntornoInstance.activeSelf)
+				return menuEntornoInstance;
+			return null;
+		}
+	}
+
 	[Header("XR Placement")]
 	[SerializeField]
 	private float menuDistance = 1.6f;
@@ -108,7 +121,8 @@ public class Menu : MonoBehaviour
 		menuEntornoInstance.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
 		menuEntornoInstance.SetActive(true);
 
-		menuEntornoInstance.AddComponent<MenuButtonHandler>();
+		var handler = menuEntornoInstance.AddComponent<MenuEntornoButtonHandler>();
+		handler.InitializeButtonListeners();
 
 		Debug.Log("Menu: Menu_Entornos abierto.");
 	}

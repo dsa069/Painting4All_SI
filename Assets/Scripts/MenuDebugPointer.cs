@@ -106,16 +106,12 @@ public class MenuDebugPointer : MonoBehaviour
 
 	private Transform GetMenuTarget()
 	{
-		var menus = FindObjectsOfType<Menu>();
-		foreach (var menu in menus)
+		if (Menu.Instance != null)
 		{
-			GameObject menuInstance = typeof(Menu).GetField("menuGeneralInstance",
-				System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-				.GetValue(menu) as GameObject;
-
-			if (menuInstance != null && menuInstance.activeSelf)
+			GameObject activeMenu = Menu.Instance.ActiveMenuInstance;
+			if (activeMenu != null && activeMenu.activeSelf)
 			{
-				return menuInstance.transform;
+				return activeMenu.transform;
 			}
 		}
 		return null;

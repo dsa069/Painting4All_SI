@@ -5,6 +5,12 @@ public class MenuButtonHandler : MonoBehaviour
 {
 	private void Start()
 	{
+		if (gameObject.name == "Menu_Entornos")
+		{
+			Debug.Log("MenuButtonHandler: Saltando inicializacion para Menu_Entornos (usa MenuEntornoButtonHandler)");
+			return;
+		}
+
 		Button[] buttons = GetComponentsInChildren<Button>(true);
 		for (int i = 0; i < buttons.Length; i++)
 		{
@@ -12,6 +18,8 @@ public class MenuButtonHandler : MonoBehaviour
 			string buttonName = buttons[i].gameObject.name;
 			buttons[i].onClick.AddListener(() => OnRadialButtonClick(index, buttonName));
 		}
+		
+		Debug.Log("MenuButtonHandler: Inicializado para " + gameObject.name + " con " + buttons.Length + " botones");
 	}
 
 	private void OnRadialButtonClick(int index, string buttonName)
