@@ -66,15 +66,13 @@ public class Menu : MonoBehaviour
 
 		if (xPressed)
 		{
-			lastMenuController = OVRInput.Controller.LTouch;
 			Debug.Log("Menu: input detectado -> X=true, A=false");
-			ToggleMenu();
+			HandleMenuButtonPressed(OVRInput.Controller.LTouch);
 		}
 		else if (aPressed)
 		{
-			lastMenuController = OVRInput.Controller.RTouch;
 			Debug.Log("Menu: input detectado -> X=false, A=true");
-			ToggleMenu();
+			HandleMenuButtonPressed(OVRInput.Controller.RTouch);
 		}
 
 		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
@@ -83,6 +81,50 @@ public class Menu : MonoBehaviour
 		}
 
 		HandleMenuTriggerInteraction();
+	}
+
+	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
+	{
+		if (menuGeneralInstance != null &&
+			menuGeneralInstance.activeSelf &&
+			lastMenuController != OVRInput.Controller.None &&
+			lastMenuController != pressedController)
+		{
+			lastMenuController = pressedController;
+			MoveMenuToOpeningController();
+			Debug.Log("Menu: movido al mando opuesto sin cerrar.");
+			return;
+		}
+
+		lastMenuController = pressedController;
+		ToggleMenu();
+	}
+
+	private void MoveMenuToOpeningController()
+	{
+		if (menuGeneralInstance == null)
+		{
+			return;
+		}
+
+		bool wasActive = menuGeneralInstance.activeSelf;
+		if (wasActive)
+		{
+			menuGeneralInstance.SetActive(false);
+		}
+
+		if (!PositionMenuAboveOpeningController())
+		{
+			PositionMenuInFrontOfUser();
+		}
+
+		if (wasActive)
+		{
+			menuGeneralInstance.SetActive(true);
+			RefreshMenuReferences();
+		}
+
+		wasTriggerPressed = false;
 	}
 
 	private void ToggleMenu()
