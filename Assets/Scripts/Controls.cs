@@ -486,6 +486,32 @@ public class GestureUIController : MonoBehaviour
     }
 
     /// <summary>
+    /// Expone el estado de B2 (pinza pulgar-meñique) en la mano derecha
+    /// </summary>
+    public bool IsB2ActiveRight
+    {
+        get
+        {
+            if (rightHand == null || !rightHand.IsTrackedDataValid)
+                return false;
+            return IsPinchB2(rightHand);
+        }
+    }
+
+    /// <summary>
+    /// Expone el estado de B2 (pinza pulgar-meñique) en la mano izquierda
+    /// </summary>
+    public bool IsB2ActiveLeft
+    {
+        get
+        {
+            if (leftHand == null || !leftHand.IsTrackedDataValid)
+                return false;
+            return IsPinchB2(leftHand);
+        }
+    }
+
+    /// <summary>
     /// Expone el estado de T2 (pinza middle-pulgar) en la mano derecha
     /// Devuelve true si el gesto T2 está activo
     /// </summary>
