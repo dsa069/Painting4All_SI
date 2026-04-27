@@ -30,7 +30,10 @@ public class MenuButtonHandler : MonoBehaviour
 				break;
 			case 2:
 				Debug.Log("Has pulsado el boton de Casa");
-				// TODO: Implementar logica aqui
+				if (Menu.Instance != null)
+				{
+					Menu.Instance.OpenEntornoMenu(Menu.Instance.MenuGeneralPosition, Menu.Instance.MenuGeneralRotation);
+				}
 
 				break;
 			case 3:
