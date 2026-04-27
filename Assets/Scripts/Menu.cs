@@ -77,6 +77,11 @@ public class Menu : MonoBehaviour
 			ToggleMenu();
 		}
 
+		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+		{
+			PositionMenuAboveOpeningController();
+		}
+
 		HandleMenuTriggerInteraction();
 	}
 
