@@ -75,11 +75,6 @@ public class Menu : MonoBehaviour
 			HandleMenuButtonPressed(OVRInput.Controller.RTouch);
 		}
 
-		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
-		{
-			PositionMenuAboveOpeningController();
-		}
-
 		HandleMenuTriggerInteraction();
 	}
 
