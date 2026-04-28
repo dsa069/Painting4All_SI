@@ -51,34 +51,40 @@ public class Menu : MonoBehaviour
 	[SerializeField]
 	private float menuForwardOffsetFromController = 0.08f;
 
+	private GestureUIController gestureController;
+    private bool wasB2LeftActiveLastFrame = false;
+    private bool wasB2RightActiveLastFrame = false;
+
+	private GameObject menuGeneralInstance;
 	private OVRInput.Controller lastMenuController = OVRInput.Controller.None;
 	private GraphicRaycaster menuGraphicRaycaster;
 	private EventSystem eventSystem;
 	private bool wasTriggerPressed = false;
 
 	private void Start()
-	{
+    {
 		instance = this;
-		ResolveMenuReference();
+        gestureController = FindObjectOfType<GestureUIController>();
+        ResolveMenuReference();
 
-		if (menuGeneralInstance == null)
-		{
-			Debug.LogWarning("Menu: no se pudo resolver Menu_General al iniciar.");
-			return;
-		}
+        if (menuGeneralInstance == null)
+        {
+            Debug.LogWarning("Menu: no se pudo resolver Menu_General al iniciar.");
+            return;
+        }
 
-		if (hideMenuOnStart)
-		{
-			menuGeneralInstance.SetActive(false);
+        if (hideMenuOnStart)
+        {
+            menuGeneralInstance.SetActive(false);
 			Debug.Log("Menu: Menu_General oculto al iniciar.");
-		}
-		else
-		{
-			PositionMenuInFrontOfUser();
-		}
+        }
+        else
+        {
+            PositionMenuInFrontOfUser();
+        }
 
 		Debug.Log("Menu: Menu_General listo para recibir input.");
-	}
+    }
 
 	public static Menu Instance => instance;
 
@@ -137,23 +143,34 @@ public class Menu : MonoBehaviour
 	}
 
 	private void Update()
-	{
-		bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // X
-		bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // A
+    {
+        bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // X
+        bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // A
 
-		if (xPressed)
-		{
+        bool b2LeftNow = (gestureController != null) && gestureController.IsB2ActiveLeft;
+        bool b2RightNow = (gestureController != null) && gestureController.IsB2ActiveRight;
+
+        if (xPressed || (b2LeftNow && !wasB2LeftActiveLastFrame))
+        {
 			Debug.Log("Menu: input detectado -> X=true, A=false");
-			HandleMenuButtonPressed(OVRInput.Controller.LTouch);
-		}
-		else if (aPressed)
-		{
+            HandleMenuButtonPressed(OVRInput.Controller.LTouch);
+        }
+        else if (aPressed || (b2RightNow && !wasB2RightActiveLastFrame))
+        {
 			Debug.Log("Menu: input detectado -> X=false, A=true");
-			HandleMenuButtonPressed(OVRInput.Controller.RTouch);
-		}
+            HandleMenuButtonPressed(OVRInput.Controller.RTouch);
+        }
 
-		HandleMenuTriggerInteraction();
-	}
+        wasB2LeftActiveLastFrame = b2LeftNow;
+        wasB2RightActiveLastFrame = b2RightNow;
+
+        if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+        {
+            PositionMenuAboveOpeningController();
+        }
+
+        HandleMenuTriggerInteraction();
+    }
 
 	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
 	{
@@ -335,8 +352,8 @@ public class Menu : MonoBehaviour
 		{
 			return;
 		}
-
-		bool triggerPressed = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, interactController);
+		bool isT1Active = (gestureController != null) && ((interactController == OVRInput.Controller.LTouch) ? gestureController.IsT1ActiveLeft : gestureController.IsT1ActiveRight);
+		bool triggerPressed = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, interactController) || isT1Active;
 		if (triggerPressed && !wasTriggerPressed)
 		{
 			OnMenuTriggerPressed(interactController);
