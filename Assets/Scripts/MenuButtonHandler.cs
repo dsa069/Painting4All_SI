@@ -10,6 +10,11 @@ public class MenuButtonHandler : MonoBehaviour
 			Debug.Log("MenuButtonHandler: Saltando inicializacion para Menu_Entornos (usa MenuEntornoButtonHandler)");
 			return;
 		}
+		if (gameObject.name == "Menu_Herramientas")
+		{
+			Debug.Log("MenuButtonHandler: Saltando inicializacion para Menu_Herramientas (usa MenuHerramientasButtonHandler)");
+			return;
+		}
 
 		Button[] buttons = GetComponentsInChildren<Button>(true);
 		for (int i = 0; i < buttons.Length; i++)
@@ -28,7 +33,10 @@ public class MenuButtonHandler : MonoBehaviour
 		{
 			case 0:
 				Debug.Log("Has pulsado el boton de Pincel");
-				// TODO: Implementar logica aqui
+				if (Menu.Instance != null)
+				{
+					Menu.Instance.OpenHerramientasMenu(Menu.Instance.MenuGeneralPosition, Menu.Instance.MenuGeneralRotation);
+				}
 				
 				break;
 			case 1:

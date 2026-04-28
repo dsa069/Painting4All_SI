@@ -15,12 +15,17 @@ public class Menu : MonoBehaviour
 	[SerializeField]
 	private GameObject menuEntornoPrefab;
 
+	[Header("Herramientas Menu Reference")]
+	[SerializeField]
+	private GameObject menuHerramientasPrefab;
+
 	[SerializeField]
 	private bool hideMenuOnStart = true;
 
 	private static Menu instance;
 	private GameObject menuGeneralInstance;
 	private GameObject menuEntornoInstance;
+	private GameObject menuHerramientasInstance;
 
 	public GameObject ActiveMenuInstance
 	{
@@ -31,6 +36,8 @@ public class Menu : MonoBehaviour
 				return menuGeneralInstance;
 			if (menuEntornoInstance != null && menuEntornoInstance.activeSelf)
 				return menuEntornoInstance;
+			if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
+				return menuHerramientasInstance;
 			return null;
 		}
 	}
@@ -138,6 +145,57 @@ public class Menu : MonoBehaviour
 			Destroy(menuEntornoInstance);
 			menuEntornoInstance = null;
 			Debug.Log("Menu: Menu_Entornos cerrado.");
+		}
+	}
+
+	public void OpenHerramientasMenu(Vector3 position, Quaternion rotation)
+	{
+		if (menuGeneralInstance != null)
+		{
+			menuGeneralInstance.SetActive(false);
+		}
+
+		if (menuHerramientasInstance != null)
+		{
+			Destroy(menuHerramientasInstance);
+		}
+
+		if (menuHerramientasPrefab == null)
+		{
+			menuHerramientasPrefab = Resources.Load<GameObject>("Prefabs/Menu_Herramientas");
+		}
+
+		if (menuHerramientasPrefab == null)
+		{
+			Debug.LogWarning("Menu: no se pudo cargar Menu_Herramientas prefab.");
+			return;
+		}
+
+		menuHerramientasInstance = Instantiate(menuHerramientasPrefab);
+		menuHerramientasInstance.name = "Menu_Herramientas";
+
+		Vector3 forwardOffset = Vector3.zero;
+		if (Camera.main != null)
+		{
+			forwardOffset = Camera.main.transform.forward * 0.3f;
+		}
+		menuHerramientasInstance.transform.position = position + forwardOffset;
+		menuHerramientasInstance.transform.rotation = rotation;
+		menuHerramientasInstance.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
+		menuHerramientasInstance.SetActive(true);
+
+		menuHerramientasInstance.AddComponent<MenuHerramientasButtonHandler>();
+
+		Debug.Log("Menu: Menu_Herramientas abierto.");
+	}
+
+	public void CloseHerramientasMenu()
+	{
+		if (menuHerramientasInstance != null)
+		{
+			Destroy(menuHerramientasInstance);
+			menuHerramientasInstance = null;
+			Debug.Log("Menu: Menu_Herramientas cerrado.");
 		}
 	}
 
