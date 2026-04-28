@@ -80,6 +80,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
     private Quaternion initialControllerRotation; // Rotación inicial del controlador al agarrarlo
     private bool isGrabbedFromBehind = false; // Flag para detectar si se agarra de atrás
 
+
     void Awake()
     {
         // Auto-detectar mandos
@@ -99,7 +100,7 @@ public class Seleccionar_Lienzo : MonoBehaviour
         {
             gameObject.AddComponent<CanvasResizeController>();
         }
-        
+
         // Inicializar posición/rotación objetivo
         targetPosition = transform.position;
         targetRotation = transform.rotation;
@@ -616,7 +617,6 @@ public class Seleccionar_Lienzo : MonoBehaviour
     /// </summary>
     private void UpdateCanvasMovement()
     {
-        // Obtener posición y rotación de la mano/mando activo
         if (!GetActiveHandTransform(out Vector3 handPosition, out Quaternion handRotation))
             return;
         

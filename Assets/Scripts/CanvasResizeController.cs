@@ -19,8 +19,8 @@ public class CanvasResizeController : MonoBehaviour
     [SerializeField] private float smoothSpeed = 18f;
 
     [Header("Handle Collider")]
-    [SerializeField] private Vector2 handleSizeLocal = new Vector2(10f, 10f);
-    [SerializeField] private float handleDepthLocal = 10f;
+    [SerializeField] private Vector2 handleSizeLocal = new Vector2(2f, 2f);
+    [SerializeField] private float handleDepthLocal = 2f;
 
     private Transform leftControllerTransform;
     private Transform rightControllerTransform;
@@ -29,6 +29,7 @@ public class CanvasResizeController : MonoBehaviour
     private bool triggerPressedRight;
     private bool lastTriggerPressedLeft;
     private bool lastTriggerPressedRight;
+    private bool anyTriggerPressed;
 
     private bool isResizing;
     private CanvasGripManager.ActiveHand resizeHand;
@@ -42,6 +43,8 @@ public class CanvasResizeController : MonoBehaviour
     private Vector3 targetScale;
 
     private Seleccionar_Lienzo thisCanvas;
+
+    public bool IsResizing => isResizing;
 
     private void Awake()
     {
@@ -61,19 +64,19 @@ public class CanvasResizeController : MonoBehaviour
             return;
         }
 
-        resizeHand = CanvasGripManager.Instance.GetOppositeHand(grippedHand);
-
-        bool isTriggerDown = GetTriggerDown(resizeHand);
-        bool isTriggerHeld = GetTriggerHeld(resizeHand);
-
-        if (!isResizing && isTriggerDown)
+        if (!isResizing)
         {
-            TryBeginResize();
+            if (anyTriggerPressed)
+            {
+                if (!TryBeginResize(CanvasGripManager.ActiveHand.Left))
+                {
+                    TryBeginResize(CanvasGripManager.ActiveHand.Right);
+                }
+            }
         }
-
-        if (isResizing)
+        else
         {
-            if (!isTriggerHeld)
+            if (!anyTriggerPressed)
             {
                 isResizing = false;
             }
@@ -109,6 +112,7 @@ public class CanvasResizeController : MonoBehaviour
     {
         triggerPressedLeft = false;
         triggerPressedRight = false;
+        anyTriggerPressed = false;
 
         foreach (InputDevice device in InputSystem.devices)
         {
@@ -117,8 +121,8 @@ public class CanvasResizeController : MonoBehaviour
                 continue;
             }
 
-            AxisControl triggerControl = xrController.TryGetChildControl<AxisControl>("trigger");
-            bool isPressed = triggerControl != null && triggerControl.ReadValue() >= triggerThreshold;
+            bool isPressed = ReadResizePress(xrController);
+            anyTriggerPressed |= isPressed;
 
             if (IsLeftHandDevice(xrController))
             {
@@ -129,6 +133,47 @@ public class CanvasResizeController : MonoBehaviour
                 triggerPressedRight = isPressed;
             }
         }
+    }
+
+    private bool ReadResizePress(XRController xrController)
+    {
+        AxisControl triggerAxis = xrController.TryGetChildControl<AxisControl>("trigger");
+        if (triggerAxis != null && triggerAxis.ReadValue() >= triggerThreshold)
+        {
+            return true;
+        }
+
+        ButtonControl triggerPressed = xrController.TryGetChildControl<ButtonControl>("triggerPressed");
+        if (triggerPressed != null && triggerPressed.isPressed)
+        {
+            return true;
+        }
+
+        ButtonControl triggerButton = xrController.TryGetChildControl<ButtonControl>("triggerButton");
+        if (triggerButton != null && triggerButton.isPressed)
+        {
+            return true;
+        }
+
+        ButtonControl selectButton = xrController.TryGetChildControl<ButtonControl>("select");
+        if (selectButton != null && selectButton.isPressed)
+        {
+            return true;
+        }
+
+        AxisControl gripAxis = xrController.TryGetChildControl<AxisControl>("grip");
+        if (gripAxis != null && gripAxis.ReadValue() >= triggerThreshold)
+        {
+            return true;
+        }
+
+        ButtonControl gripPressed = xrController.TryGetChildControl<ButtonControl>("gripPressed");
+        if (gripPressed != null && gripPressed.isPressed)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private bool IsLeftHandDevice(XRController device)
@@ -211,19 +256,19 @@ public class CanvasResizeController : MonoBehaviour
         return hand == CanvasGripManager.ActiveHand.Left ? leftControllerTransform : rightControllerTransform;
     }
 
-    private void TryBeginResize()
+    private bool TryBeginResize(CanvasGripManager.ActiveHand hand)
     {
-        Transform controller = GetController(resizeHand);
+        Transform controller = GetController(hand);
         if (controller == null)
         {
-            return;
+            return false;
         }
 
         Ray ray = new Ray(controller.position, controller.forward);
         RaycastHit[] hits = Physics.RaycastAll(ray, raycastMaxDistance, ~0, QueryTriggerInteraction.Collide);
         if (hits == null || hits.Length == 0)
         {
-            return;
+            return false;
         }
 
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -236,9 +281,12 @@ public class CanvasResizeController : MonoBehaviour
                 continue;
             }
 
+            resizeHand = hand;
             BeginResize(marker.Kind, controller.position);
-            return;
+            return true;
         }
+
+        return false;
     }
 
     private void BeginResize(CanvasResizeHandleKind kind, Vector3 controllerWorldPos)
@@ -251,8 +299,9 @@ public class CanvasResizeController : MonoBehaviour
         handleDirectionLocal = GetHandleDirection(kind).normalized;
         pivotLocal = GetPivotLocal(kind, half);
 
-        Vector3 startControllerLocal = transform.InverseTransformPoint(controllerWorldPos);
-        startProjectedDistance = Mathf.Max(0.0001f, Vector3.Dot(startControllerLocal - pivotLocal, handleDirectionLocal));
+        Vector3 pivotWorld = transform.TransformPoint(pivotLocal);
+        Vector3 handleDirWorld = transform.TransformDirection(handleDirectionLocal).normalized;
+        startProjectedDistance = Mathf.Max(0.0001f, Vector3.Dot(controllerWorldPos - pivotWorld, handleDirWorld));
 
         targetScale = transform.localScale;
         isResizing = true;
@@ -284,8 +333,9 @@ public class CanvasResizeController : MonoBehaviour
             return;
         }
 
-        Vector3 controllerLocal = transform.InverseTransformPoint(controller.position);
-        float currentProjected = Vector3.Dot(controllerLocal - pivotLocal, handleDirectionLocal);
+        Vector3 pivotWorld = transform.TransformPoint(pivotLocal);
+        Vector3 handleDirWorld = transform.TransformDirection(handleDirectionLocal).normalized;
+        float currentProjected = Vector3.Dot(controller.position - pivotWorld, handleDirWorld);
         float ratio = currentProjected / startProjectedDistance;
         ratio = Mathf.Clamp(ratio, 0.1f, 10f);
 
