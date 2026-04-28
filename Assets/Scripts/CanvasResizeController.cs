@@ -29,7 +29,6 @@ public class CanvasResizeController : MonoBehaviour
     private bool triggerPressedRight;
     private bool lastTriggerPressedLeft;
     private bool lastTriggerPressedRight;
-    private bool anyTriggerPressed;
 
     private bool isResizing;
     private CanvasGripManager.ActiveHand resizeHand;
@@ -64,19 +63,19 @@ public class CanvasResizeController : MonoBehaviour
             return;
         }
 
-        if (!isResizing)
+        resizeHand = CanvasGripManager.Instance.GetOppositeHand(grippedHand);
+
+        bool isTriggerDown = GetTriggerDown(resizeHand);
+        bool isTriggerHeld = GetTriggerHeld(resizeHand);
+
+        if (!isResizing && (isTriggerDown || isTriggerHeld))
         {
-            if (anyTriggerPressed)
-            {
-                if (!TryBeginResize(CanvasGripManager.ActiveHand.Left))
-                {
-                    TryBeginResize(CanvasGripManager.ActiveHand.Right);
-                }
-            }
+            TryBeginResize(resizeHand);
         }
-        else
+
+        if (isResizing)
         {
-            if (!anyTriggerPressed)
+            if (!isTriggerHeld)
             {
                 isResizing = false;
             }
@@ -112,7 +111,6 @@ public class CanvasResizeController : MonoBehaviour
     {
         triggerPressedLeft = false;
         triggerPressedRight = false;
-        anyTriggerPressed = false;
 
         foreach (InputDevice device in InputSystem.devices)
         {
@@ -122,7 +120,6 @@ public class CanvasResizeController : MonoBehaviour
             }
 
             bool isPressed = ReadResizePress(xrController);
-            anyTriggerPressed |= isPressed;
 
             if (IsLeftHandDevice(xrController))
             {
