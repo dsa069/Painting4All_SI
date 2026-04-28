@@ -34,29 +34,75 @@ public class MenuEntornoButtonHandler : MonoBehaviour
 
     private void OnRadialButtonClick(int index, string buttonName)
     {
+        if (Menu.Instance != null)
+        {
+            Menu.Instance.CloseEntornoMenu();
+        }
+
+        DayAndNight dayAndNight = FindObjectOfType<DayAndNight>();
+        if (dayAndNight == null)
+        {
+            Debug.LogWarning("MenuEntornoButtonHandler: No se encontró el script DayAndNight en la escena.");
+        }
+
+        Transform playerTransform = null;
+        OVRCameraRig cameraRig = FindObjectOfType<OVRCameraRig>();
+        if (cameraRig != null)
+        {
+            playerTransform = cameraRig.transform;
+        }
+        else if (Camera.main != null)
+        {
+            playerTransform = Camera.main.transform.root;
+        }
+
         switch (index)
         {
-            case 0:
-                Debug.Log("Has pulsado el boton de entorno 0");
+            case 0: // Blanco / Sol
+                Debug.Log("Has pulsado el boton de entorno Sol (Blanco)");
+                TeleportPlayer(playerTransform, new Vector3(6000, 0, 0));
+                if (dayAndNight != null) dayAndNight.SetWhiteSuperNova();
                 break;
-            case 1:
-                Debug.Log("Has pulsado el boton de entorno 1");
+            case 1: // Negro / Luna
+                Debug.Log("Has pulsado el boton de entorno Luna (Negro)");
+                TeleportPlayer(playerTransform, new Vector3(8000, 0, 0));
+                if (dayAndNight != null) dayAndNight.SetDarkNight();
                 break;
-            case 2:
-                Debug.Log("Has pulsado el boton de entorno 2");
+            case 2: // Bosque
+                Debug.Log("Has pulsado el boton de entorno Bosque");
+                TeleportPlayer(playerTransform, new Vector3(50, 7, 50));
+                if (dayAndNight != null) dayAndNight.SetForestDay();
                 break;
-            case 3:
-                Debug.Log("Has pulsado el boton de entorno 3");
+            case 3: // Playa
+                Debug.Log("Has pulsado el boton de entorno Playa");
+                TeleportPlayer(playerTransform, new Vector3(2000, 7, 25));
+                if (dayAndNight != null) dayAndNight.SetBeachSunset();
                 break;
-            case 4:
-                Debug.Log("Has pulsado el boton de entorno 4");
+            case 4: // Carcel / Prision
+                Debug.Log("Has pulsado el boton de entorno Carcel (Prision)");
+                TeleportPlayer(playerTransform, new Vector3(4000, 0, 0));
+                if (dayAndNight != null) dayAndNight.SetForestDay(); // DAY
                 break;
-            case 5:
-                Debug.Log("Has pulsado el boton de entorno 5");
+            case 5: // MR
+                Debug.Log("Has pulsado el boton de entorno MR");
+                // TODO: Lógica de MR vacía por ahora
                 break;
             default:
                 Debug.Log("Boton de entorno no mapeado: " + index);
                 break;
+        }
+    }
+
+    private void TeleportPlayer(Transform playerTransform, Vector3 destination)
+    {
+        if (playerTransform != null)
+        {
+            playerTransform.position = destination;
+            Debug.Log($"Jugador teletransportado a {destination}.");
+        }
+        else
+        {
+            Debug.LogWarning("MenuEntornoButtonHandler: No se encontró al jugador para el teletransporte (OVRCameraRig).");
         }
     }
 }
