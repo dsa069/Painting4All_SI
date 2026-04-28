@@ -55,7 +55,6 @@ public class Menu : MonoBehaviour
     private bool wasB2LeftActiveLastFrame = false;
     private bool wasB2RightActiveLastFrame = false;
 
-	private GameObject menuGeneralInstance;
 	private OVRInput.Controller lastMenuController = OVRInput.Controller.None;
 	private GraphicRaycaster menuGraphicRaycaster;
 	private EventSystem eventSystem;
