@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 6684559589481162739}
   - component: {fileID: 3585294285949927493}
   - component: {fileID: 3173768937211050578}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Lienzo
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -135,6 +135,9 @@ MonoBehaviour:
   handleSizeLocal: {x: 2, y: 2}
   handleDepthLocal: 2
   logEdgeHits: 1
+  autoCreateHandles: 1
+  handleLayerName: ResizeHandle
+  onlyRaycastHandles: 1
   isHeldByHandA: 0
   isResizing: 0
 --- !u!114 &3585294285949927493
