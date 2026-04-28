@@ -121,8 +121,7 @@ public class Menu : MonoBehaviour
 		menuEntornoInstance.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
 		menuEntornoInstance.SetActive(true);
 
-		var handler = menuEntornoInstance.AddComponent<MenuEntornoButtonHandler>();
-		handler.InitializeButtonListeners();
+		menuEntornoInstance.AddComponent<MenuEntornoButtonHandler>();
 
 		Debug.Log("Menu: Menu_Entornos abierto.");
 	}
@@ -326,7 +325,7 @@ public class Menu : MonoBehaviour
 
 	private void HandleMenuTriggerInteraction()
 	{
-		if (menuGeneralInstance == null || !menuGeneralInstance.activeSelf)
+		if (ActiveMenuInstance == null || !ActiveMenuInstance.activeSelf)
 		{
 			return;
 		}
@@ -348,7 +347,7 @@ public class Menu : MonoBehaviour
 
 	private void OnMenuTriggerPressed(OVRInput.Controller interactController)
 	{
-		if (menuGeneralInstance == null)
+		if (ActiveMenuInstance == null)
 		{
 			return;
 		}
@@ -370,12 +369,12 @@ public class Menu : MonoBehaviour
 	{
 		hitButton = null;
 
-		if (menuGeneralInstance == null)
+		if (ActiveMenuInstance == null)
 		{
 			return false;
 		}
 
-		RectTransform menuRect = menuGeneralInstance.GetComponent<RectTransform>();
+		RectTransform menuRect = ActiveMenuInstance.GetComponent<RectTransform>();
 		if (menuRect == null)
 		{
 			return false;
@@ -395,7 +394,7 @@ public class Menu : MonoBehaviour
 				if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
 					menuRect, worldHit, null, out localPoint))
 				{
-					Button[] buttons = menuGeneralInstance.GetComponentsInChildren<Button>();
+					Button[] buttons = ActiveMenuInstance.GetComponentsInChildren<Button>();
 					foreach (Button button in buttons)
 					{
 						RectTransform buttonRect = button.GetComponent<RectTransform>();

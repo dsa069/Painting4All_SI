@@ -3,11 +3,7 @@ using UnityEngine.UI;
 
 public class MenuEntornoButtonHandler : MonoBehaviour
 {
-    private void Awake()
-    {
-        InitializeButtonListeners();
-        Debug.Log("MenuEntornoButtonHandler.Awake() llamado en: " + gameObject.name);
-    }
+    private bool listenersInitialized;
 
     private void OnEnable()
     {
@@ -15,24 +11,29 @@ public class MenuEntornoButtonHandler : MonoBehaviour
         Debug.Log("MenuEntornoButtonHandler.OnEnable() llamado en: " + gameObject.name);
     }
 
-public void InitializeButtonListeners()
-{
-    Button[] buttons = GetComponentsInChildren<Button>(true);
-    Debug.Log("MenuEntornoButtonHandler: Encontrados " + buttons.Length + " botones en " + gameObject.name);
-    
-    for (int i = 0; i < buttons.Length; i++)
+    public void InitializeButtonListeners()
     {
-        int index = i;
-        string buttonName = buttons[i].gameObject.name;
-        Debug.Log("MenuEntornoButtonHandler: Agregando listener para botón " + i + ": " + buttonName);
-        buttons[i].onClick.AddListener(() => OnRadialButtonClick(index, buttonName));
+        if (listenersInitialized)
+        {
+            return;
+        }
+
+        Button[] buttons = GetComponentsInChildren<Button>(true);
+        Debug.Log("MenuEntornoButtonHandler: Encontrados " + buttons.Length + " botones en " + gameObject.name);
+        
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            int index = i;
+            string buttonName = buttons[i].gameObject.name;
+            Debug.Log("MenuEntornoButtonHandler: Agregando listener para botón " + i + ": " + buttonName);
+            buttons[i].onClick.AddListener(() => OnRadialButtonClick(index, buttonName));
+        }
+
+        listenersInitialized = true;
     }
-}
 
     private void OnRadialButtonClick(int index, string buttonName)
     {
-        Debug.Log("MenuEntornoButtonHandler: OnRadialButtonClick llamado - índice: " + index + ", nombre: " + buttonName);
-        
         switch (index)
         {
             case 0:
