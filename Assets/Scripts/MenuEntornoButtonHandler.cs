@@ -85,7 +85,15 @@ public class MenuEntornoButtonHandler : MonoBehaviour
                 break;
             case 5: // MR
                 Debug.Log("Has pulsado el boton de entorno MR");
-                // TODO: Lógica de MR vacía por ahora
+                PassthroughToggler toggler = FindObjectOfType<PassthroughToggler>();
+                if (toggler != null)
+                {
+                    toggler.ToggleMR(!toggler.IsMRActive);
+                }
+                else
+                {
+                    Debug.LogError("No se encontró PassthroughToggler en la escena.");
+                }
                 break;
             default:
                 Debug.Log("Boton de entorno no mapeado: " + index);
