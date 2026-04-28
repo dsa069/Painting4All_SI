@@ -11,13 +11,3 @@ public enum CanvasResizeHandleKind
     EdgeLeft,
     EdgeRight
 }
-
-public class CanvasResizeHandleMarker : MonoBehaviour
-{
-    public CanvasResizeHandleKind Kind { get; private set; }
-
-    public void Initialize(CanvasResizeHandleKind kind)
-    {
-        Kind = kind;
-    }
-}

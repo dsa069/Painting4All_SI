@@ -18,6 +18,10 @@ public class CanvasDynamicResizer : MonoBehaviour
     [SerializeField] private string handleLayerName = "ResizeHandle";
     [SerializeField] private bool onlyRaycastHandles = true;
 
+    [Header("Raycast Settings")]
+    // Asigna esto en el Inspector a la capa "ResizeHandles"
+    [SerializeField] private LayerMask handleLayerMask;
+
     [Header("Estado Interno (Solo lectura)")]
     public bool isHeldByHandA = false;
     public bool isResizing = false;
@@ -31,6 +35,14 @@ public class CanvasDynamicResizer : MonoBehaviour
     // Tipo de borde interactuado
     private enum ResizeAxis { None, Horizontal, Vertical, Proportional }
     private ResizeAxis currentResizeAxis = ResizeAxis.None;
+
+    // --- VARIABLES QUE FALTABAN (FIX CS0103) ---
+        private CanvasResizeHandleKind currentHandleKind;
+        private CanvasGripManager.ActiveHand resizingHand; 
+        private Vector3 initialScale;
+        private Vector3 lastHandLocalPos;
+        private Seleccionar_Lienzo selectionScript;
+
 
     private bool triedAutoDetectControllers;
 
@@ -404,5 +416,52 @@ public class CanvasDynamicResizer : MonoBehaviour
                 return;
             }
         }
+    }
+
+    private void TryStartResizing(CanvasGripManager.ActiveHand hand)
+{
+    Transform controllerT = GetControllerTransform(hand);
+    Ray ray = new Ray(controllerT.position, controllerT.forward);
+    RaycastHit hit;
+
+    // AÑADIDO: Pasamos la LayerMask al Raycast para que IGNORE el collider del lienzo
+    if (Physics.Raycast(ray, out hit, 10f, handleLayerMask))
+    {
+        CanvasResizeHandleMarker handle = hit.collider.GetComponent<CanvasResizeHandleMarker>();
+        if (handle != null)
+        {
+            isResizing = true;
+            currentHandleKind = handle.Kind;
+            resizingHand = hand;
+            initialScale = transform.localScale;
+            
+            lastHandLocalPos = transform.InverseTransformPoint(controllerT.position);
+            Debug.Log($"[CanvasResizer] Iniciando resize: {currentHandleKind}");
+        }
+    }
+}
+
+private Transform GetControllerTransform(CanvasGripManager.ActiveHand hand)
+    {
+        return (hand == CanvasGripManager.ActiveHand.Left) ? leftControllerTransform : rightControllerTransform;
+    }
+
+    private bool GetIndexTriggerDown(CanvasGripManager.ActiveHand hand)
+    {
+        OVRInput.Controller controller = (hand == CanvasGripManager.ActiveHand.Left) ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
+        return OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, controller);
+    }
+
+    private CanvasGripManager.ActiveHand? GetHandGrippingThisCanvas()
+    {
+        if (CanvasGripManager.Instance == null) return null;
+        
+        if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Left) == selectionScript)
+            return CanvasGripManager.ActiveHand.Left;
+        
+        if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Right) == selectionScript)
+            return CanvasGripManager.ActiveHand.Right;
+
+        return null;
     }
 }
