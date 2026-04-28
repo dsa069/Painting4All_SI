@@ -132,6 +132,9 @@ MonoBehaviour:
   raycastMaxDistance: 100
   leftControllerTransform: {fileID: 0}
   rightControllerTransform: {fileID: 0}
+  handleSizeLocal: {x: 2, y: 2}
+  handleDepthLocal: 2
+  logEdgeHits: 1
   isHeldByHandA: 0
   isResizing: 0
 --- !u!114 &3585294285949927493

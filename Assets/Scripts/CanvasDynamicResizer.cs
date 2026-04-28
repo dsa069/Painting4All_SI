@@ -11,6 +11,12 @@ public class CanvasDynamicResizer : MonoBehaviour
     [SerializeField] private float raycastMaxDistance = 100f;
     [SerializeField] private Transform leftControllerTransform;
     [SerializeField] private Transform rightControllerTransform;
+    [SerializeField] private Vector2 handleSizeLocal = new Vector2(2f, 2f);
+    [SerializeField] private float handleDepthLocal = 2f;
+    [SerializeField] private bool logEdgeHits = false;
+    [SerializeField] private bool autoCreateHandles = true;
+    [SerializeField] private string handleLayerName = "ResizeHandle";
+    [SerializeField] private bool onlyRaycastHandles = true;
 
     [Header("Estado Interno (Solo lectura)")]
     public bool isHeldByHandA = false;
@@ -31,6 +37,14 @@ public class CanvasDynamicResizer : MonoBehaviour
     private void Awake()
     {
         TryAutoDetectControllers();
+        EnsureHandleColliders();
+        ApplyHandleSizes();
+    }
+
+    private void OnValidate()
+    {
+        EnsureHandleColliders();
+        ApplyHandleSizes();
     }
 
     void Update()
@@ -102,28 +116,25 @@ public class CanvasDynamicResizer : MonoBehaviour
 
         // Determinar cómo escalar según el collider tocado (Esquina vs Borde)
         CanvasResizeHandleMarker marker = edge.GetComponent<CanvasResizeHandleMarker>();
-        if (marker != null)
+        if (marker == null)
         {
-            switch (marker.Kind)
-            {
-                case CanvasResizeHandleKind.EdgeLeft:
-                case CanvasResizeHandleKind.EdgeRight:
-                    currentResizeAxis = ResizeAxis.Horizontal;
-                    break;
-                case CanvasResizeHandleKind.EdgeTop:
-                case CanvasResizeHandleKind.EdgeBottom:
-                    currentResizeAxis = ResizeAxis.Vertical;
-                    break;
-                default:
-                    currentResizeAxis = ResizeAxis.Proportional;
-                    break;
-            }
+            currentResizeAxis = ResizeAxis.None;
+            return;
         }
-        else
+
+        switch (marker.Kind)
         {
-            if (edge.CompareTag("EdgeX")) currentResizeAxis = ResizeAxis.Horizontal;
-            else if (edge.CompareTag("EdgeY")) currentResizeAxis = ResizeAxis.Vertical;
-            else if (edge.CompareTag("Corner")) currentResizeAxis = ResizeAxis.Proportional;
+            case CanvasResizeHandleKind.EdgeLeft:
+            case CanvasResizeHandleKind.EdgeRight:
+                currentResizeAxis = ResizeAxis.Horizontal;
+                break;
+            case CanvasResizeHandleKind.EdgeTop:
+            case CanvasResizeHandleKind.EdgeBottom:
+                currentResizeAxis = ResizeAxis.Vertical;
+                break;
+            default:
+                currentResizeAxis = ResizeAxis.Proportional;
+                break;
         }
     }
 
@@ -187,7 +198,8 @@ public class CanvasDynamicResizer : MonoBehaviour
         }
 
         Ray ray = new Ray(controller.position, controller.forward);
-        RaycastHit[] hits = Physics.RaycastAll(ray, raycastMaxDistance, ~0, QueryTriggerInteraction.Collide);
+        int mask = GetHandleLayerMask();
+        RaycastHit[] hits = Physics.RaycastAll(ray, raycastMaxDistance, mask, QueryTriggerInteraction.Collide);
         if (hits == null || hits.Length == 0)
         {
             return null;
@@ -197,19 +209,153 @@ public class CanvasDynamicResizer : MonoBehaviour
 
         for (int i = 0; i < hits.Length; i++)
         {
-            CanvasResizeHandleMarker marker = hits[i].collider.GetComponent<CanvasResizeHandleMarker>();
+            CanvasResizeHandleMarker marker = hits[i].collider.GetComponentInParent<CanvasResizeHandleMarker>();
             if (marker != null)
             {
+                if (logEdgeHits)
+                {
+                    Debug.Log($"[CanvasDynamicResizer] Hit handle {marker.Kind} with {hits[i].collider.name}", hits[i].collider);
+                }
                 return marker.gameObject;
-            }
-
-            if (hits[i].collider.CompareTag("EdgeX") || hits[i].collider.CompareTag("EdgeY") || hits[i].collider.CompareTag("Corner"))
-            {
-                return hits[i].collider.gameObject;
             }
         }
 
+        if (logEdgeHits)
+        {
+            string hitList = string.Empty;
+            int maxLogHits = Mathf.Min(4, hits.Length);
+            for (int i = 0; i < maxLogHits; i++)
+            {
+                Collider col = hits[i].collider;
+                hitList += $"{col.name} (layer {LayerMask.LayerToName(col.gameObject.layer)}), ";
+            }
+            Debug.Log($"[CanvasDynamicResizer] Raycast hit, but no CanvasResizeHandleMarker found. First hits: {hitList}");
+        }
+
         return null;
+    }
+
+    private void ApplyHandleSizes()
+    {
+        CanvasResizeHandleMarker[] markers = GetComponentsInChildren<CanvasResizeHandleMarker>(true);
+        for (int i = 0; i < markers.Length; i++)
+        {
+            BoxCollider box = markers[i].GetComponent<BoxCollider>();
+            if (box == null)
+            {
+                continue;
+            }
+
+            box.isTrigger = true;
+            box.size = new Vector3(handleSizeLocal.x, handleSizeLocal.y, handleDepthLocal);
+            ApplyHandleLayer(markers[i].gameObject);
+        }
+    }
+
+    private void EnsureHandleColliders()
+    {
+        if (!autoCreateHandles)
+        {
+            return;
+        }
+
+        Transform existingRoot = transform.Find("ResizeHandles");
+        if (existingRoot != null)
+        {
+            if (existingRoot.childCount == 0)
+            {
+                CreateHandleChildren(existingRoot);
+            }
+
+            return;
+        }
+
+        GameObject rootObj = new GameObject("ResizeHandles");
+        rootObj.transform.SetParent(transform, false);
+        CreateHandleChildren(rootObj.transform);
+    }
+
+    private void CreateHandleChildren(Transform root)
+    {
+        Vector2 half = GetCanvasHalfSizeLocal();
+
+        CreateHandle(root, "CornerTopLeft", new Vector3(-half.x, half.y, 0f), CanvasResizeHandleKind.CornerTopLeft);
+        CreateHandle(root, "CornerTopRight", new Vector3(half.x, half.y, 0f), CanvasResizeHandleKind.CornerTopRight);
+        CreateHandle(root, "CornerBottomLeft", new Vector3(-half.x, -half.y, 0f), CanvasResizeHandleKind.CornerBottomLeft);
+        CreateHandle(root, "CornerBottomRight", new Vector3(half.x, -half.y, 0f), CanvasResizeHandleKind.CornerBottomRight);
+
+        CreateHandle(root, "EdgeTop", new Vector3(0f, half.y, 0f), CanvasResizeHandleKind.EdgeTop);
+        CreateHandle(root, "EdgeBottom", new Vector3(0f, -half.y, 0f), CanvasResizeHandleKind.EdgeBottom);
+        CreateHandle(root, "EdgeLeft", new Vector3(-half.x, 0f, 0f), CanvasResizeHandleKind.EdgeLeft);
+        CreateHandle(root, "EdgeRight", new Vector3(half.x, 0f, 0f), CanvasResizeHandleKind.EdgeRight);
+    }
+
+    private void CreateHandle(Transform root, string handleName, Vector3 localPos, CanvasResizeHandleKind kind)
+    {
+        GameObject h = new GameObject(handleName);
+        h.transform.SetParent(root, false);
+        h.transform.localPosition = localPos;
+        h.transform.localRotation = Quaternion.identity;
+        ApplyHandleLayer(h);
+
+        BoxCollider col = h.AddComponent<BoxCollider>();
+        col.isTrigger = true;
+        col.size = new Vector3(handleSizeLocal.x, handleSizeLocal.y, handleDepthLocal);
+
+        CanvasResizeHandleMarker marker = h.AddComponent<CanvasResizeHandleMarker>();
+        marker.Initialize(kind);
+    }
+
+    private int GetHandleLayerMask()
+    {
+        if (!onlyRaycastHandles)
+        {
+            return ~0;
+        }
+
+        int layer = LayerMask.NameToLayer(handleLayerName);
+        if (layer < 0)
+        {
+            return ~0;
+        }
+
+        return 1 << layer;
+    }
+
+    private void ApplyHandleLayer(GameObject handle)
+    {
+        int layer = LayerMask.NameToLayer(handleLayerName);
+        if (layer >= 0)
+        {
+            handle.layer = layer;
+        }
+    }
+
+    private Vector2 GetCanvasHalfSizeLocal()
+    {
+        BoxCollider box = GetComponent<Collider>() as BoxCollider;
+        if (box != null)
+        {
+            Vector3 half = box.size * 0.5f;
+            return new Vector2(Mathf.Abs(half.x), Mathf.Abs(half.y));
+        }
+
+        SpriteRenderer sr = GetComponent<SpriteRenderer>();
+        if (sr != null && sr.sprite != null)
+        {
+            float ppu = sr.sprite.pixelsPerUnit;
+            Rect rect = sr.sprite.rect;
+            return new Vector2(rect.width / ppu * 0.5f, rect.height / ppu * 0.5f);
+        }
+
+        Renderer r = GetComponent<Renderer>();
+        if (r != null)
+        {
+            Vector3 localExtents = transform.InverseTransformVector(r.bounds.extents);
+            return new Vector2(Mathf.Abs(localExtents.x), Mathf.Abs(localExtents.y));
+        }
+
+        return new Vector2(0.5f, 0.5f);
     }
 
     private Transform GetControllerTransform(OVRInput.Controller controller)
