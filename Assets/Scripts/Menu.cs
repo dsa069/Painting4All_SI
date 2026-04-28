@@ -11,8 +11,29 @@ public class Menu : MonoBehaviour
 	[SerializeField]
 	private GameObject menuGeneral;
 
+	[Header("Entorno Menu Reference")]
+	[SerializeField]
+	private GameObject menuEntornoPrefab;
+
 	[SerializeField]
 	private bool hideMenuOnStart = true;
+
+	private static Menu instance;
+	private GameObject menuGeneralInstance;
+	private GameObject menuEntornoInstance;
+
+	public GameObject ActiveMenuInstance
+	{
+		get
+		{
+			// Returns the currently active menu instance
+			if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+				return menuGeneralInstance;
+			if (menuEntornoInstance != null && menuEntornoInstance.activeSelf)
+				return menuEntornoInstance;
+			return null;
+		}
+	}
 
 	[Header("XR Placement")]
 	[SerializeField]
@@ -34,7 +55,6 @@ public class Menu : MonoBehaviour
     private bool wasB2LeftActiveLastFrame = false;
     private bool wasB2RightActiveLastFrame = false;
 
-	private GameObject menuGeneralInstance;
 	private OVRInput.Controller lastMenuController = OVRInput.Controller.None;
 	private GraphicRaycaster menuGraphicRaycaster;
 	private EventSystem eventSystem;
@@ -42,6 +62,7 @@ public class Menu : MonoBehaviour
 
 	private void Start()
     {
+		instance = this;
         gestureController = FindObjectOfType<GestureUIController>();
         ResolveMenuReference();
 
@@ -63,6 +84,62 @@ public class Menu : MonoBehaviour
 
 		Debug.Log("Menu: Menu_General listo para recibir input.");
     }
+
+	public static Menu Instance => instance;
+
+	public Vector3 MenuGeneralPosition => menuGeneralInstance != null ? menuGeneralInstance.transform.position : Vector3.zero;
+	public Quaternion MenuGeneralRotation => menuGeneralInstance != null ? menuGeneralInstance.transform.rotation : Quaternion.identity;
+
+	public void OpenEntornoMenu(Vector3 position, Quaternion rotation)
+	{
+		if (menuGeneralInstance != null)
+		{
+			menuGeneralInstance.SetActive(false);
+		}
+
+		if (menuEntornoInstance != null)
+		{
+			Destroy(menuEntornoInstance);
+		}
+
+		if (menuEntornoPrefab == null)
+		{
+			menuEntornoPrefab = Resources.Load<GameObject>("Prefabs/Menu_Entornos");
+		}
+
+		if (menuEntornoPrefab == null)
+		{
+			Debug.LogWarning("Menu: no se pudo cargar Menu_Entornos prefab.");
+			return;
+		}
+
+		menuEntornoInstance = Instantiate(menuEntornoPrefab);
+		menuEntornoInstance.name = "Menu_Entornos";
+
+		Vector3 forwardOffset = Vector3.zero;
+		if (Camera.main != null)
+		{
+			forwardOffset = Camera.main.transform.forward * 0.3f;
+		}
+		menuEntornoInstance.transform.position = position + forwardOffset;
+		menuEntornoInstance.transform.rotation = rotation;
+		menuEntornoInstance.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
+		menuEntornoInstance.SetActive(true);
+
+		menuEntornoInstance.AddComponent<MenuEntornoButtonHandler>();
+
+		Debug.Log("Menu: Menu_Entornos abierto.");
+	}
+
+	public void CloseEntornoMenu()
+	{
+		if (menuEntornoInstance != null)
+		{
+			Destroy(menuEntornoInstance);
+			menuEntornoInstance = null;
+			Debug.Log("Menu: Menu_Entornos cerrado.");
+		}
+	}
 
 	private void Update()
     {
@@ -264,7 +341,7 @@ public class Menu : MonoBehaviour
 
 	private void HandleMenuTriggerInteraction()
 	{
-		if (menuGeneralInstance == null || !menuGeneralInstance.activeSelf)
+		if (ActiveMenuInstance == null || !ActiveMenuInstance.activeSelf)
 		{
 			return;
 		}
@@ -286,7 +363,7 @@ public class Menu : MonoBehaviour
 
 	private void OnMenuTriggerPressed(OVRInput.Controller interactController)
 	{
-		if (menuGeneralInstance == null)
+		if (ActiveMenuInstance == null)
 		{
 			return;
 		}
@@ -308,12 +385,12 @@ public class Menu : MonoBehaviour
 	{
 		hitButton = null;
 
-		if (menuGeneralInstance == null)
+		if (ActiveMenuInstance == null)
 		{
 			return false;
 		}
 
-		RectTransform menuRect = menuGeneralInstance.GetComponent<RectTransform>();
+		RectTransform menuRect = ActiveMenuInstance.GetComponent<RectTransform>();
 		if (menuRect == null)
 		{
 			return false;
@@ -333,7 +410,7 @@ public class Menu : MonoBehaviour
 				if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
 					menuRect, worldHit, null, out localPoint))
 				{
-					Button[] buttons = menuGeneralInstance.GetComponentsInChildren<Button>();
+					Button[] buttons = ActiveMenuInstance.GetComponentsInChildren<Button>();
 					foreach (Button button in buttons)
 					{
 						RectTransform buttonRect = button.GetComponent<RectTransform>();
