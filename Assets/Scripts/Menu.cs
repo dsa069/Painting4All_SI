@@ -66,7 +66,8 @@ public class Menu : MonoBehaviour
         gestureController = FindObjectOfType<GestureUIController>();
         ResolveMenuReference();
 
-        if (menuGeneralInstance == null)
+		if (menuGeneralInstance == null)
+
         {
             Debug.LogWarning("Menu: no se pudo resolver Menu_General al iniciar.");
             return;
@@ -119,7 +120,7 @@ public class Menu : MonoBehaviour
 		Vector3 forwardOffset = Vector3.zero;
 		if (Camera.main != null)
 		{
-			forwardOffset = Camera.main.transform.forward * 0.3f;
+			forwardOffset = Camera.main.transform.forward * 2f;
 		}
 		menuEntornoInstance.transform.position = position + forwardOffset;
 		menuEntornoInstance.transform.rotation = rotation;
@@ -173,6 +174,9 @@ public class Menu : MonoBehaviour
 
 	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
 	{
+
+		CloseEntornoMenu();
+
 		if (menuGeneralInstance != null &&
 			menuGeneralInstance.activeSelf &&
 			lastMenuController != OVRInput.Controller.None &&
@@ -287,7 +291,8 @@ public class Menu : MonoBehaviour
 		Vector3 targetPosition = mainCamera.transform.position + mainCamera.transform.forward * menuDistance + mainCamera.transform.up * menuVerticalOffset;
 		menuTransform.position = targetPosition;
 
-		Vector3 directionToCamera = mainCamera.transform.position - targetPosition;
+		Vector3 directionToCamera = targetPosition - mainCamera.transform.position;
+
 		directionToCamera.y = 0f;
 
 		if (directionToCamera.sqrMagnitude > 0.001f)
@@ -346,19 +351,19 @@ public class Menu : MonoBehaviour
 			return;
 		}
 
-		OVRInput.Controller interactController = GetOppositeController(lastMenuController);
-		if (interactController == OVRInput.Controller.None)
+		bool triggerLeftPressed = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch) || ((gestureController != null) && gestureController.IsT1ActiveLeft);
+		bool triggerRightPressed = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch) || ((gestureController != null) && gestureController.IsT1ActiveRight);
+
+		if (triggerLeftPressed && !wasTriggerPressed)
 		{
-			return;
+			OnMenuTriggerPressed(OVRInput.Controller.LTouch);
 		}
-		bool isT1Active = (gestureController != null) && ((interactController == OVRInput.Controller.LTouch) ? gestureController.IsT1ActiveLeft : gestureController.IsT1ActiveRight);
-		bool triggerPressed = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, interactController) || isT1Active;
-		if (triggerPressed && !wasTriggerPressed)
+		else if (triggerRightPressed && !wasTriggerPressed)
 		{
-			OnMenuTriggerPressed(interactController);
+			OnMenuTriggerPressed(OVRInput.Controller.RTouch);
 		}
 
-		wasTriggerPressed = triggerPressed;
+		wasTriggerPressed = triggerLeftPressed || triggerRightPressed;
 	}
 
 	private void OnMenuTriggerPressed(OVRInput.Controller interactController)
@@ -487,7 +492,8 @@ public class Menu : MonoBehaviour
 
 		if (mainCamera != null)
 		{
-			Vector3 directionToCamera = mainCamera.transform.position - targetPosition;
+		Vector3 directionToCamera = targetPosition - mainCamera.transform.position;
+
 			directionToCamera.y = 0f;
 
 			if (directionToCamera.sqrMagnitude > 0.001f)
