@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using System;
+using System.IO;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem.UI;
 #endif
@@ -225,8 +227,49 @@ public class Menu : MonoBehaviour
     /// </summary>
     private void ExportarLienzo(GameObject lienzo)
     {
-        Debug.Log($"[Menu/Exportación] ¡Acción cruzada detectada! Exportando el lienzo: {lienzo.name}");
-        // TODO: Implementar lógica de guardado/serialización aquí en el futuro
+		if (lienzo == null)
+		{
+			Debug.LogWarning("[Menu/Exportación] No se pudo exportar: el lienzo es null.");
+			return;
+		}
+
+		Paint paint = lienzo.GetComponent<Paint>();
+		if (paint == null)
+		{
+			Debug.LogWarning($"[Menu/Exportación] No se encontró el componente Paint en '{lienzo.name}'.");
+			return;
+		}
+
+		Texture2D exportTexture = paint.ExportTexture;
+		if (exportTexture == null)
+		{
+			Debug.LogWarning($"[Menu/Exportación] El lienzo '{lienzo.name}' no tiene una textura exportable.");
+			return;
+		}
+
+		try
+		{
+			byte[] pngData = exportTexture.EncodeToPNG();
+			if (pngData == null || pngData.Length == 0)
+			{
+				Debug.LogWarning($"[Menu/Exportación] No se pudo generar el PNG para '{lienzo.name}'.");
+				return;
+			}
+
+			string exportFolder = Path.Combine(Application.persistentDataPath, "Exports");
+			Directory.CreateDirectory(exportFolder);
+
+			string safeCanvasName = string.IsNullOrWhiteSpace(lienzo.name) ? "Lienzo" : lienzo.name.Trim();
+			string fileName = $"{safeCanvasName}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+			string filePath = Path.Combine(exportFolder, fileName);
+
+			File.WriteAllBytes(filePath, pngData);
+			Debug.Log($"[Menu/Exportación] Lienzo exportado correctamente: {filePath}");
+		}
+		catch (Exception exception)
+		{
+			Debug.LogError($"[Menu/Exportación] Error exportando '{lienzo.name}': {exception.Message}");
+		}
     }
 
 	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
