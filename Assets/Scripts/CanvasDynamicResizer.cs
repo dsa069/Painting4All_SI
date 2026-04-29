@@ -37,9 +37,6 @@ public class CanvasDynamicResizer : MonoBehaviour
     private OVRInput.Controller handAController;
     private OVRInput.Controller handBController;
 
-    private const float IndexPressThreshold = 0.2f;
-    private const float IndexReleaseThreshold = 0.1f;
-    private bool handBIndexHeld;
 
     // Tipo de borde interactuado
     private enum ResizeAxis { None, Horizontal, Vertical, Proportional }
@@ -52,7 +49,7 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private void Awake()
     {
-        selectionScript = GetComponent<Seleccionar_Lienzo>();
+        selectionScript = GetComponentInParent<Seleccionar_Lienzo>();
         TryAutoDetectControllers();
         EnsureHandleColliders();
         ApplyHandleSizes();
@@ -91,7 +88,7 @@ public class CanvasDynamicResizer : MonoBehaviour
             return;
         }
 
-        if (CanvasGripManager.Instance != null && selectionScript != null)
+        if (CanvasGripManager.Instance != null)
         {
             isHeldByHandA = false;
             return;
@@ -242,7 +239,7 @@ public class CanvasDynamicResizer : MonoBehaviour
         for (int i = 0; i < hits.Length; i++)
         {
             CanvasResizeHandleMarker marker = hits[i].collider.GetComponentInParent<CanvasResizeHandleMarker>();
-            if (marker != null)
+            if (marker != null && IsHandleForThisCanvas(marker))
             {
                 if (logEdgeHits)
                 {
@@ -479,22 +476,18 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private bool GetHandBIndexPressed()
     {
+        if (OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, handBController))
+        {
+            return true;
+        }
+
         bool isLeftHand = IsLeftController(handBController);
-        if (!TryGetIndexTriggerValueFromInputSystem(isLeftHand, out float value))
+        if (TryGetIndexTriggerValueFromInputSystem(isLeftHand, out float inputSystemValue))
         {
-            value = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, handBController);
+            return inputSystemValue > 0.1f;
         }
 
-        if (!handBIndexHeld && value >= IndexPressThreshold)
-        {
-            handBIndexHeld = true;
-        }
-        else if (handBIndexHeld && value <= IndexReleaseThreshold)
-        {
-            handBIndexHeld = false;
-        }
-
-        return handBIndexHeld;
+        return false;
     }
 
     private bool IsLeftController(OVRInput.Controller controller)
@@ -577,12 +570,35 @@ public class CanvasDynamicResizer : MonoBehaviour
     {
         if (CanvasGripManager.Instance == null) return null;
 
-        if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Left) == selectionScript)
+        Seleccionar_Lienzo leftCanvas = CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Left);
+        if (IsSameCanvas(leftCanvas))
             return CanvasGripManager.ActiveHand.Left;
 
-        if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Right) == selectionScript)
+        Seleccionar_Lienzo rightCanvas = CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Right);
+        if (IsSameCanvas(rightCanvas))
             return CanvasGripManager.ActiveHand.Right;
 
         return null;
+    }
+
+    private bool IsSameCanvas(Seleccionar_Lienzo canvas)
+    {
+        if (canvas == null)
+        {
+            return false;
+        }
+
+        if (selectionScript != null)
+        {
+            return canvas == selectionScript;
+        }
+
+        return canvas.transform.root == transform.root;
+    }
+
+    private bool IsHandleForThisCanvas(CanvasResizeHandleMarker marker)
+    {
+        Transform owner = selectionScript != null ? selectionScript.transform : transform;
+        return marker.transform.IsChildOf(owner);
     }
 }
