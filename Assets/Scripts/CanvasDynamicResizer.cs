@@ -17,22 +17,28 @@ public class CanvasDynamicResizer : MonoBehaviour
     [SerializeField] private Transform leftControllerTransform;
     [SerializeField] private Transform rightControllerTransform;
     [SerializeField] private float triggerPressThreshold = 0.1f;
+    [SerializeField] private float triggerReleaseThreshold = 0.05f;
 
     [Header("Detección de Handler")]
     [SerializeField] private bool useCanvasSurfaceFallback = true;
     [Range(0.05f, 0.45f)]
     [SerializeField] private float edgeZonePercent = 0.15f;
 
+    [Header("Estabilidad de Resize")]
+    [SerializeField] private float resizeMovementDeadZone = 0.0025f;
+
     // Estado Interno
     private bool isResizing = false;
     private CanvasResizeHandleKind currentHandleKind;
-    private Vector3 initialScale;
-    private Vector3 lastHandLocalPos;
+    private Vector3 resizeStartScale;
+    private Vector3 resizeStartLocalHitPoint;
     private Seleccionar_Lienzo selectionScript;
     private bool warnedMissingControllerAnchors;
     private Collider canvasCollider;
     private SpriteRenderer canvasSpriteRenderer;
     private int lastNoHandleLogFrame = -999;
+    private bool isResizeTriggerLatched;
+    private CanvasGripManager.ActiveHand? latchedTriggerHand;
 
     private void Awake()
     {
@@ -79,8 +85,14 @@ public class CanvasDynamicResizer : MonoBehaviour
             ? CanvasGripManager.ActiveHand.Right 
             : CanvasGripManager.ActiveHand.Left;
 
+        if (latchedTriggerHand != handB)
+        {
+            latchedTriggerHand = handB;
+            isResizeTriggerLatched = false;
+        }
+
         // 3. Detectar Gatillo Frontal (Index Trigger) en Mano B usando OpenXR / Nuevo Input System
-        bool triggerPressed = GetIndexTriggerDown(handB);
+        bool triggerPressed = UpdateResizeTriggerLatch(handB);
 
         if (triggerPressed && !isResizing)
         {
@@ -125,12 +137,7 @@ public class CanvasDynamicResizer : MonoBehaviour
             if (handle != null)
             {
                 Debug.Log($"[CanvasDynamicResizer] ✓ Handler detectado: '{hit.collider.name}' | Kind: {handle.Kind} | Distancia: {hit.distance:F3}");
-                isResizing = true;
-                currentHandleKind = handle.Kind;
-                initialScale = transform.localScale;
-                
-                // Calculamos posición local
-                lastHandLocalPos = transform.InverseTransformPoint(controllerT.position);
+                BeginResizing(handle.Kind, transform.InverseTransformPoint(hit.point));
                 Debug.Log($"[CanvasDynamicResizer] Iniciando resize en: {currentHandleKind}");
                 return; // Borde encontrado, salimos
             }
@@ -139,11 +146,11 @@ public class CanvasDynamicResizer : MonoBehaviour
         if (useCanvasSurfaceFallback && TryResolveHandleFromCanvasSurface(ray, out CanvasResizeHandleKind fallbackKind, out float fallbackDistance))
         {
             Debug.Log($"[CanvasDynamicResizer] ✓ Handler detectado por fallback de superficie | Kind: {fallbackKind} | Distancia: {fallbackDistance:F3}");
-            isResizing = true;
-            currentHandleKind = fallbackKind;
-            initialScale = transform.localScale;
-            lastHandLocalPos = transform.InverseTransformPoint(controllerT.position);
-            Debug.Log($"[CanvasDynamicResizer] Iniciando resize en: {currentHandleKind}");
+            if (TryGetCanvasLocalHit(ray, out Vector3 localHitPoint, out _))
+            {
+                BeginResizing(fallbackKind, localHitPoint);
+                Debug.Log($"[CanvasDynamicResizer] Iniciando resize en: {currentHandleKind}");
+            }
             return;
         }
 
@@ -163,51 +170,74 @@ public class CanvasDynamicResizer : MonoBehaviour
             return;
         }
 
-        Vector3 currentHandLocalPos = transform.InverseTransformPoint(controllerT.position);
-        Vector3 delta = currentHandLocalPos - lastHandLocalPos;
+        Ray ray = new Ray(controllerT.position, controllerT.forward);
+        if (!TryGetCanvasLocalHit(ray, out Vector3 currentHitLocalPoint, out _))
+        {
+            StopResizing("se perdió el punto de impacto sobre el lienzo");
+            return;
+        }
 
-        Vector3 newScale = transform.localScale;
+        Vector3 delta = currentHitLocalPoint - resizeStartLocalHitPoint;
+
+        if (Mathf.Abs(delta.x) < resizeMovementDeadZone)
+        {
+            delta.x = 0f;
+        }
+
+        if (Mathf.Abs(delta.y) < resizeMovementDeadZone)
+        {
+            delta.y = 0f;
+        }
+
+        Vector3 newScale = resizeStartScale;
 
         // Lógica de expansión
         switch (currentHandleKind)
         {
             case CanvasResizeHandleKind.EdgeRight:
-                newScale.x += delta.x * resizeSensitivity;
+                newScale.x = resizeStartScale.x + (delta.x * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.EdgeLeft:
-                newScale.x -= delta.x * resizeSensitivity;
+                newScale.x = resizeStartScale.x - (delta.x * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.EdgeTop:
-                newScale.y += delta.y * resizeSensitivity;
+                newScale.y = resizeStartScale.y + (delta.y * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.EdgeBottom:
-                newScale.y -= delta.y * resizeSensitivity;
+                newScale.y = resizeStartScale.y - (delta.y * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.CornerTopRight:
-                float growTR = (delta.x + delta.y) * 0.5f;
-                newScale += new Vector3(growTR, growTR, 0) * resizeSensitivity;
+                newScale.x = resizeStartScale.x + (delta.x * resizeSensitivity);
+                newScale.y = resizeStartScale.y + (delta.y * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.CornerTopLeft:
-                float growTL = (-delta.x + delta.y) * 0.5f;
-                newScale += new Vector3(growTL, growTL, 0) * resizeSensitivity;
+                newScale.x = resizeStartScale.x - (delta.x * resizeSensitivity);
+                newScale.y = resizeStartScale.y + (delta.y * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.CornerBottomRight:
-                float growBR = (delta.x - delta.y) * 0.5f;
-                newScale += new Vector3(growBR, growBR, 0) * resizeSensitivity;
+                newScale.x = resizeStartScale.x + (delta.x * resizeSensitivity);
+                newScale.y = resizeStartScale.y - (delta.y * resizeSensitivity);
                 break;
             case CanvasResizeHandleKind.CornerBottomLeft:
-                float growBL = (-delta.x - delta.y) * 0.5f;
-                newScale += new Vector3(growBL, growBL, 0) * resizeSensitivity;
+                newScale.x = resizeStartScale.x - (delta.x * resizeSensitivity);
+                newScale.y = resizeStartScale.y - (delta.y * resizeSensitivity);
                 break;
         }
 
         // Aplicar límites
         newScale.x = Mathf.Clamp(newScale.x, minScale.x, maxScale.x);
         newScale.y = Mathf.Clamp(newScale.y, minScale.y, maxScale.y);
-        newScale.z = initialScale.z; // El grosor Z no cambia
+        newScale.z = resizeStartScale.z; // El grosor Z no cambia
 
         transform.localScale = newScale;
-        lastHandLocalPos = currentHandLocalPos;
+    }
+
+    private void BeginResizing(CanvasResizeHandleKind handleKind, Vector3 localHitPoint)
+    {
+        isResizing = true;
+        currentHandleKind = handleKind;
+        resizeStartScale = transform.localScale;
+        resizeStartLocalHitPoint = localHitPoint;
     }
 
     private void StopResizing(string reason = null)
@@ -225,6 +255,7 @@ public class CanvasDynamicResizer : MonoBehaviour
         }
 
         isResizing = false;
+        isResizeTriggerLatched = false;
     }
 
     // --- MÉTODOS DE AYUDA ---
@@ -246,8 +277,34 @@ public class CanvasDynamicResizer : MonoBehaviour
     }
 
     // Lee gatillo frontal de mano específica usando la misma estrategia robusta que Paint.
-    private bool GetIndexTriggerDown(CanvasGripManager.ActiveHand hand)
+    private bool UpdateResizeTriggerLatch(CanvasGripManager.ActiveHand hand)
     {
+        if (!TryGetIndexTriggerValue(hand, out float triggerValue))
+        {
+            isResizeTriggerLatched = false;
+            return false;
+        }
+
+        if (isResizeTriggerLatched)
+        {
+            if (triggerValue <= triggerReleaseThreshold)
+            {
+                isResizeTriggerLatched = false;
+            }
+        }
+        else if (triggerValue >= triggerPressThreshold)
+        {
+            isResizeTriggerLatched = true;
+        }
+
+        return isResizeTriggerLatched;
+    }
+
+    private bool TryGetIndexTriggerValue(CanvasGripManager.ActiveHand hand, out float triggerValue)
+    {
+        triggerValue = 0f;
+        bool foundDevice = false;
+
         foreach (var device in InputSystem.devices)
         {
             if (device is XRController controller)
@@ -258,17 +315,22 @@ public class CanvasDynamicResizer : MonoBehaviour
                     (hand == CanvasGripManager.ActiveHand.Right && !isLeft))
                 {
                     var triggerControl = controller.TryGetChildControl<AxisControl>("trigger");
-                    if (triggerControl != null && triggerControl.ReadValue() >= triggerPressThreshold)
+                    if (triggerControl != null)
                     {
-                        return true;
+                        triggerValue = Mathf.Max(triggerValue, triggerControl.ReadValue());
+                        foundDevice = true;
                     }
 
                     try
                     {
                         var triggerButton = controller.TryGetChildControl<ButtonControl>("trigger");
-                        if (triggerButton != null && triggerButton.isPressed)
+                        if (triggerButton != null)
                         {
-                            return true;
+                            foundDevice = true;
+                            if (triggerButton.isPressed)
+                            {
+                                triggerValue = 1f;
+                            }
                         }
                     }
                     catch
@@ -279,7 +341,7 @@ public class CanvasDynamicResizer : MonoBehaviour
             }
         }
 
-        return false;
+        return foundDevice;
     }
 
     private bool IsLeftHandDevice(XRController device)
