@@ -127,7 +127,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CanvasDynamicResizer
   resizeSensitivity: 0.3
-  minScale: {x: 0.5, y: 0.5, z: 0.5}
+  minScale: {x: 0.1, y: 0.1, z: 0.1}
   maxScale: {x: 3, y: 3, z: 3}
   handleLayerMask:
     serializedVersion: 2

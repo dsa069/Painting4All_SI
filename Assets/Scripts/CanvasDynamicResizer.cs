@@ -8,8 +8,8 @@ public class CanvasDynamicResizer : MonoBehaviour
 {
     [Header("Configuración de Escala")]
     public float resizeSensitivity = 0.3f;
-    public Vector3 minScale = new Vector3(0.1f, 0.1f, 0.1f);
-    public Vector3 maxScale = new Vector3(5.0f, 5.0f, 5.0f);
+    public Vector3 minScale = new Vector3(0.01f, 0.01f, 0.01f);
+    public Vector3 maxScale = new Vector3(3.0f, 3.0f, 3.0f);
 
     [Header("Referencias y Capas")]
     [Tooltip("Asigna aquí la capa ResizeHandle")]
