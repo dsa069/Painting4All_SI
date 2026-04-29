@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System;
 using System.IO;
+using System.Collections;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem.UI;
 #endif
@@ -61,6 +62,18 @@ public class Menu : MonoBehaviour
 	private GraphicRaycaster menuGraphicRaycaster;
 	private EventSystem eventSystem;
 	private bool wasTriggerPressed = false;
+
+	[Header("Feedback Exportacion")]
+	[SerializeField]
+	private float exportFeedbackDuration = 1.8f;
+
+	[SerializeField]
+	private Vector3 exportFeedbackLocalOffset = new Vector3(0f, -0.1f, 1.2f);
+
+	private Canvas exportFeedbackCanvas;
+	private Text exportFeedbackText;
+	private Coroutine exportFeedbackCoroutine;
+	private Coroutine hapticCoroutine;
 
 	private void Start()
     {
@@ -230,6 +243,7 @@ public class Menu : MonoBehaviour
 		if (lienzo == null)
 		{
 			Debug.LogWarning("[Menu/Exportación] No se pudo exportar: el lienzo es null.");
+			MostrarFeedbackExportacion("No se pudo exportar el lienzo.", false);
 			return;
 		}
 
@@ -237,6 +251,7 @@ public class Menu : MonoBehaviour
 		if (paint == null)
 		{
 			Debug.LogWarning($"[Menu/Exportación] No se encontró el componente Paint en '{lienzo.name}'.");
+			MostrarFeedbackExportacion("El lienzo no tiene componente Paint.", false);
 			return;
 		}
 
@@ -244,6 +259,7 @@ public class Menu : MonoBehaviour
 		if (exportTexture == null)
 		{
 			Debug.LogWarning($"[Menu/Exportación] El lienzo '{lienzo.name}' no tiene una textura exportable.");
+			MostrarFeedbackExportacion("El lienzo no tiene textura exportable.", false);
 			return;
 		}
 
@@ -253,6 +269,7 @@ public class Menu : MonoBehaviour
 			if (pngData == null || pngData.Length == 0)
 			{
 				Debug.LogWarning($"[Menu/Exportación] No se pudo generar el PNG para '{lienzo.name}'.");
+				MostrarFeedbackExportacion("Error al generar el PNG.", false);
 				return;
 			}
 
@@ -265,12 +282,138 @@ public class Menu : MonoBehaviour
 
 			File.WriteAllBytes(filePath, pngData);
 			Debug.Log($"[Menu/Exportación] Lienzo exportado correctamente: {filePath}");
+			MostrarFeedbackExportacion("Lienzo exportado correctamente", true);
 		}
 		catch (Exception exception)
 		{
 			Debug.LogError($"[Menu/Exportación] Error exportando '{lienzo.name}': {exception.Message}");
+			MostrarFeedbackExportacion("Error al exportar el lienzo", false);
 		}
     }
+
+	private void MostrarFeedbackExportacion(string mensaje, bool exito)
+	{
+		if (!EnsureExportFeedbackUI())
+		{
+			return;
+		}
+
+		exportFeedbackText.text = mensaje;
+		exportFeedbackText.color = exito
+			? new Color(0.62f, 1f, 0.62f, 1f)
+			: new Color(1f, 0.62f, 0.62f, 1f);
+		exportFeedbackCanvas.gameObject.SetActive(true);
+
+		if (exportFeedbackCoroutine != null)
+		{
+			StopCoroutine(exportFeedbackCoroutine);
+		}
+		exportFeedbackCoroutine = StartCoroutine(HideExportFeedbackAfterDelay());
+
+		if (hapticCoroutine != null)
+		{
+			StopCoroutine(hapticCoroutine);
+		}
+		hapticCoroutine = StartCoroutine(PlayShortHapticPulse(exito));
+	}
+
+	private bool EnsureExportFeedbackUI()
+	{
+		if (exportFeedbackCanvas != null && exportFeedbackText != null)
+		{
+			ReanchorExportFeedback();
+			return true;
+		}
+
+		Camera mainCamera = Camera.main;
+		if (mainCamera == null)
+		{
+			Debug.LogWarning("Menu: no se pudo mostrar feedback de exportación porque Camera.main no está disponible.");
+			return false;
+		}
+
+		GameObject canvasGO = new GameObject("ExportFeedbackCanvas");
+		exportFeedbackCanvas = canvasGO.AddComponent<Canvas>();
+		exportFeedbackCanvas.renderMode = RenderMode.WorldSpace;
+		exportFeedbackCanvas.sortingOrder = 200;
+
+		RectTransform canvasRect = exportFeedbackCanvas.GetComponent<RectTransform>();
+		canvasRect.sizeDelta = new Vector2(420f, 110f);
+
+		GameObject bgGO = new GameObject("Background");
+		bgGO.transform.SetParent(canvasGO.transform, false);
+		Image bgImage = bgGO.AddComponent<Image>();
+		bgImage.color = new Color(0f, 0f, 0f, 0.6f);
+
+		RectTransform bgRect = bgGO.GetComponent<RectTransform>();
+		bgRect.anchorMin = Vector2.zero;
+		bgRect.anchorMax = Vector2.one;
+		bgRect.offsetMin = Vector2.zero;
+		bgRect.offsetMax = Vector2.zero;
+
+		GameObject textGO = new GameObject("Text");
+		textGO.transform.SetParent(bgGO.transform, false);
+		exportFeedbackText = textGO.AddComponent<Text>();
+		exportFeedbackText.alignment = TextAnchor.MiddleCenter;
+		exportFeedbackText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		exportFeedbackText.fontSize = 34;
+		exportFeedbackText.resizeTextForBestFit = true;
+		exportFeedbackText.resizeTextMinSize = 20;
+		exportFeedbackText.resizeTextMaxSize = 40;
+
+		RectTransform textRect = textGO.GetComponent<RectTransform>();
+		textRect.anchorMin = new Vector2(0.05f, 0.1f);
+		textRect.anchorMax = new Vector2(0.95f, 0.9f);
+		textRect.offsetMin = Vector2.zero;
+		textRect.offsetMax = Vector2.zero;
+
+		ReanchorExportFeedback();
+		exportFeedbackCanvas.gameObject.SetActive(false);
+		return true;
+	}
+
+	private void ReanchorExportFeedback()
+	{
+		if (exportFeedbackCanvas == null)
+		{
+			return;
+		}
+
+		Camera mainCamera = Camera.main;
+		if (mainCamera == null)
+		{
+			return;
+		}
+
+		Transform canvasTransform = exportFeedbackCanvas.transform;
+		canvasTransform.SetParent(mainCamera.transform, false);
+		canvasTransform.localPosition = exportFeedbackLocalOffset;
+		canvasTransform.localRotation = Quaternion.identity;
+		canvasTransform.localScale = Vector3.one * 0.0014f;
+	}
+
+	private IEnumerator HideExportFeedbackAfterDelay()
+	{
+		yield return new WaitForSeconds(exportFeedbackDuration);
+		if (exportFeedbackCanvas != null)
+		{
+			exportFeedbackCanvas.gameObject.SetActive(false);
+		}
+	}
+
+	private IEnumerator PlayShortHapticPulse(bool exito)
+	{
+		float amplitude = exito ? 0.22f : 0.12f;
+		float frequency = exito ? 0.9f : 0.5f;
+		float duration = exito ? 0.09f : 0.12f;
+
+		OVRInput.SetControllerVibration(frequency, amplitude, OVRInput.Controller.LTouch);
+		OVRInput.SetControllerVibration(frequency, amplitude, OVRInput.Controller.RTouch);
+		yield return new WaitForSeconds(duration);
+
+		OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
+		OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
+	}
 
 	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
 	{
