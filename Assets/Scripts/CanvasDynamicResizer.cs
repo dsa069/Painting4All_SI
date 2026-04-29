@@ -31,7 +31,7 @@ public class CanvasDynamicResizer : MonoBehaviour
     private bool isResizing = false;
     private CanvasResizeHandleKind currentHandleKind;
     private Vector3 resizeStartScale;
-    private Vector3 resizeStartLocalHitPoint;
+    private Vector3 resizeStartWorldHitPoint;
     private Seleccionar_Lienzo selectionScript;
     private bool warnedMissingControllerAnchors;
     private Collider canvasCollider;
@@ -137,7 +137,7 @@ public class CanvasDynamicResizer : MonoBehaviour
             if (handle != null)
             {
                 Debug.Log($"[CanvasDynamicResizer] ✓ Handler detectado: '{hit.collider.name}' | Kind: {handle.Kind} | Distancia: {hit.distance:F3}");
-                BeginResizing(handle.Kind, transform.InverseTransformPoint(hit.point));
+                BeginResizing(handle.Kind, hit.point);
                 Debug.Log($"[CanvasDynamicResizer] Iniciando resize en: {currentHandleKind}");
                 return; // Borde encontrado, salimos
             }
@@ -146,9 +146,9 @@ public class CanvasDynamicResizer : MonoBehaviour
         if (useCanvasSurfaceFallback && TryResolveHandleFromCanvasSurface(ray, out CanvasResizeHandleKind fallbackKind, out float fallbackDistance))
         {
             Debug.Log($"[CanvasDynamicResizer] ✓ Handler detectado por fallback de superficie | Kind: {fallbackKind} | Distancia: {fallbackDistance:F3}");
-            if (TryGetCanvasLocalHit(ray, out Vector3 localHitPoint, out _))
+            if (TryGetCanvasWorldHit(ray, out Vector3 worldHitPoint, out _))
             {
-                BeginResizing(fallbackKind, localHitPoint);
+                BeginResizing(fallbackKind, worldHitPoint);
                 Debug.Log($"[CanvasDynamicResizer] Iniciando resize en: {currentHandleKind}");
             }
             return;
@@ -171,13 +171,17 @@ public class CanvasDynamicResizer : MonoBehaviour
         }
 
         Ray ray = new Ray(controllerT.position, controllerT.forward);
-        if (!TryGetCanvasLocalHit(ray, out Vector3 currentHitLocalPoint, out _))
+        if (!TryGetCanvasWorldHit(ray, out Vector3 currentWorldHitPoint, out _))
         {
-            StopResizing("se perdió el punto de impacto sobre el lienzo");
+            // Si el raycast falla, no detenemos el resize; simplemente saltamos este frame
+            // El latch se mantiene activo y se reintentar el raycast en el siguiente frame
             return;
         }
 
-        Vector3 delta = currentHitLocalPoint - resizeStartLocalHitPoint;
+        // Convertir puntos mundiales a locales del canvas para comparación consistente
+        Vector3 startLocalHitPoint = transform.InverseTransformPoint(resizeStartWorldHitPoint);
+        Vector3 currentLocalHitPoint = transform.InverseTransformPoint(currentWorldHitPoint);
+        Vector3 delta = currentLocalHitPoint - startLocalHitPoint;
 
         if (Mathf.Abs(delta.x) < resizeMovementDeadZone)
         {
@@ -232,12 +236,12 @@ public class CanvasDynamicResizer : MonoBehaviour
         transform.localScale = newScale;
     }
 
-    private void BeginResizing(CanvasResizeHandleKind handleKind, Vector3 localHitPoint)
+    private void BeginResizing(CanvasResizeHandleKind handleKind, Vector3 worldHitPoint)
     {
         isResizing = true;
         currentHandleKind = handleKind;
         resizeStartScale = transform.localScale;
-        resizeStartLocalHitPoint = localHitPoint;
+        resizeStartWorldHitPoint = worldHitPoint;
     }
 
     private void StopResizing(string reason = null)
@@ -281,8 +285,15 @@ public class CanvasDynamicResizer : MonoBehaviour
     {
         if (!TryGetIndexTriggerValue(hand, out float triggerValue))
         {
-            isResizeTriggerLatched = false;
-            return false;
+            // Si no encontramos el device, asumimos que el trigger está suelto
+            // pero mantenemos el latch activo durante un ciclo para evitar oscilación
+            // Solo se resetea si el latch ya estaba activo; si no estaba activo, permanece inactivo
+            if (!isResizeTriggerLatched)
+            {
+                return false;
+            }
+            // Si estaba latched, mantenerlo durante este frame
+            return isResizeTriggerLatched;
         }
 
         if (isResizeTriggerLatched)
@@ -477,6 +488,42 @@ public class CanvasDynamicResizer : MonoBehaviour
                 {
                     Vector3 worldPoint = ray.GetPoint(t);
                     localHitPoint = canvasSpriteRenderer.transform.InverseTransformPoint(worldPoint);
+                    distance = t;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryGetCanvasWorldHit(Ray ray, out Vector3 worldHitPoint, out float distance)
+    {
+        worldHitPoint = Vector3.zero;
+        distance = 0f;
+
+        if (canvasCollider != null)
+        {
+            if (canvasCollider.Raycast(ray, out RaycastHit hit, 10f))
+            {
+                worldHitPoint = hit.point;
+                distance = hit.distance;
+                return true;
+            }
+        }
+
+        if (canvasSpriteRenderer != null)
+        {
+            Vector3 planeNormal = canvasSpriteRenderer.transform.forward;
+            Vector3 planePoint = canvasSpriteRenderer.transform.position;
+            float denom = Vector3.Dot(planeNormal, ray.direction);
+
+            if (Mathf.Abs(denom) > 1e-6f)
+            {
+                float t = Vector3.Dot(planeNormal, planePoint - ray.origin) / denom;
+                if (t >= 0f)
+                {
+                    worldHitPoint = ray.GetPoint(t);
                     distance = t;
                     return true;
                 }
