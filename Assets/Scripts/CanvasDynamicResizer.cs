@@ -1,4 +1,9 @@
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+using UnityEngine.InputSystem.XR;
+#endif
 
 public class CanvasDynamicResizer : MonoBehaviour
 {
@@ -27,27 +32,27 @@ public class CanvasDynamicResizer : MonoBehaviour
     public bool isResizing = false;
 
     // Referencias para el cálculo
-    private Vector3 initialHandPosition;
+    private Vector3 initialHandLocalPosition;
     private Vector3 initialCanvasScale;
     private OVRInput.Controller handAController;
     private OVRInput.Controller handBController;
+
+    private const float IndexPressThreshold = 0.2f;
+    private const float IndexReleaseThreshold = 0.1f;
+    private bool handBIndexHeld;
 
     // Tipo de borde interactuado
     private enum ResizeAxis { None, Horizontal, Vertical, Proportional }
     private ResizeAxis currentResizeAxis = ResizeAxis.None;
 
-    // --- VARIABLES QUE FALTABAN (FIX CS0103) ---
-        private CanvasResizeHandleKind currentHandleKind;
-        private CanvasGripManager.ActiveHand resizingHand; 
-        private Vector3 initialScale;
-        private Vector3 lastHandLocalPos;
-        private Seleccionar_Lienzo selectionScript;
+    private Seleccionar_Lienzo selectionScript;
 
 
     private bool triedAutoDetectControllers;
 
     private void Awake()
     {
+        selectionScript = GetComponent<Seleccionar_Lienzo>();
         TryAutoDetectControllers();
         EnsureHandleColliders();
         ApplyHandleSizes();
@@ -77,7 +82,21 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private void HandleHoldLogic()
     {
-        // Simplificación: Detectamos si ALGUN mando está pulsando el Grip (Gatillo lateral)
+        CanvasGripManager.ActiveHand? grippingHand = GetHandGrippingThisCanvas();
+        if (grippingHand.HasValue)
+        {
+            isHeldByHandA = true;
+            handAController = grippingHand.Value == CanvasGripManager.ActiveHand.Left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
+            handBController = grippingHand.Value == CanvasGripManager.ActiveHand.Left ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
+            return;
+        }
+
+        if (CanvasGripManager.Instance != null && selectionScript != null)
+        {
+            isHeldByHandA = false;
+            return;
+        }
+
         bool leftGrip = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch);
         bool rightGrip = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.RTouch);
 
@@ -95,8 +114,7 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private void HandleResizeLogic()
     {
-        // Detectar si la Mano B pulsa el gatillo frontal (Index)
-        bool handBIndex = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, handBController);
+        bool handBIndex = GetHandBIndexPressed();
 
         if (handBIndex && !isResizing)
         {
@@ -122,17 +140,21 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private void StartResizing(GameObject edge)
     {
-        isResizing = true;
-        initialHandPosition = OVRInput.GetLocalControllerPosition(handBController);
-        initialCanvasScale = transform.localScale;
-
-        // Determinar cómo escalar según el collider tocado (Esquina vs Borde)
         CanvasResizeHandleMarker marker = edge.GetComponent<CanvasResizeHandleMarker>();
         if (marker == null)
         {
             currentResizeAxis = ResizeAxis.None;
             return;
         }
+
+        if (!TryGetHandBLocalPosition(out initialHandLocalPosition))
+        {
+            currentResizeAxis = ResizeAxis.None;
+            return;
+        }
+
+        isResizing = true;
+        initialCanvasScale = transform.localScale;
 
         switch (marker.Kind)
         {
@@ -158,15 +180,13 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private void ApplyResize()
     {
-        Vector3 currentHandPos = OVRInput.GetLocalControllerPosition(handBController);
-        
-        // 1. Calcular el vector de movimiento de la mano
-        Vector3 handMovement = currentHandPos - initialHandPosition;
+        if (!TryGetHandBLocalPosition(out Vector3 currentHandLocalPos))
+        {
+            StopResizing();
+            return;
+        }
 
-        // 2. Convertir el movimiento del mundo al espacio local del canvas
-        // Esto es VITAL: Si el canvas está rotado, mover la mano en Z del mundo 
-        // no significa hacer el canvas más grande.
-        Vector3 localMovement = transform.InverseTransformDirection(handMovement);
+        Vector3 localMovement = currentHandLocalPos - initialHandLocalPosition;
 
         Vector3 newScale = initialCanvasScale;
 
@@ -210,7 +230,7 @@ public class CanvasDynamicResizer : MonoBehaviour
         }
 
         Ray ray = new Ray(controller.position, controller.forward);
-        int mask = GetHandleLayerMask();
+        int mask = handleLayerMask.value != 0 ? handleLayerMask.value : GetHandleLayerMask();
         RaycastHit[] hits = Physics.RaycastAll(ray, raycastMaxDistance, mask, QueryTriggerInteraction.Collide);
         if (hits == null || hits.Length == 0)
         {
@@ -401,12 +421,20 @@ public class CanvasDynamicResizer : MonoBehaviour
         Transform[] allObjects = FindObjectsOfType<Transform>();
         foreach (Transform t in allObjects)
         {
-            if (leftControllerTransform == null && (t.name == "LeftControllerAnchor" || t.name == "LeftHand" || t.name == "LeftHandAnchor"))
+            string name = t.name;
+            if (name.Contains("Detached"))
+            {
+                continue;
+            }
+
+            if (leftControllerTransform == null && (name == "LeftControllerAnchor" || name == "LeftHand" || name == "LeftHandAnchor" ||
+                (name.Contains("Left") && (name.Contains("Controller") || name.Contains("Hand")))))
             {
                 leftControllerTransform = t;
             }
 
-            if (rightControllerTransform == null && (t.name == "RightControllerAnchor" || t.name == "RightHand" || t.name == "RightHandAnchor"))
+            if (rightControllerTransform == null && (name == "RightControllerAnchor" || name == "RightHand" || name == "RightHandAnchor" ||
+                (name.Contains("Right") && (name.Contains("Controller") || name.Contains("Hand")))))
             {
                 rightControllerTransform = t;
             }
@@ -418,47 +446,140 @@ public class CanvasDynamicResizer : MonoBehaviour
         }
     }
 
-    private void TryStartResizing(CanvasGripManager.ActiveHand hand)
-{
-    Transform controllerT = GetControllerTransform(hand);
-    Ray ray = new Ray(controllerT.position, controllerT.forward);
-    RaycastHit hit;
-
-    // AÑADIDO: Pasamos la LayerMask al Raycast para que IGNORE el collider del lienzo
-    if (Physics.Raycast(ray, out hit, 10f, handleLayerMask))
+    private bool TryGetHandBWorldPosition(out Vector3 worldPosition)
     {
-        CanvasResizeHandleMarker handle = hit.collider.GetComponent<CanvasResizeHandleMarker>();
-        if (handle != null)
+        Transform controller = GetControllerTransform(handBController);
+        if (controller == null)
         {
-            isResizing = true;
-            currentHandleKind = handle.Kind;
-            resizingHand = hand;
-            initialScale = transform.localScale;
-            
-            lastHandLocalPos = transform.InverseTransformPoint(controllerT.position);
-            Debug.Log($"[CanvasResizer] Iniciando resize: {currentHandleKind}");
+            TryAutoDetectControllers();
+            controller = GetControllerTransform(handBController);
         }
-    }
-}
 
-private Transform GetControllerTransform(CanvasGripManager.ActiveHand hand)
-    {
-        return (hand == CanvasGripManager.ActiveHand.Left) ? leftControllerTransform : rightControllerTransform;
+        if (controller == null)
+        {
+            worldPosition = Vector3.zero;
+            return false;
+        }
+
+        worldPosition = controller.position;
+        return true;
     }
 
-    private bool GetIndexTriggerDown(CanvasGripManager.ActiveHand hand)
+    private bool TryGetHandBLocalPosition(out Vector3 localPosition)
     {
-        OVRInput.Controller controller = (hand == CanvasGripManager.ActiveHand.Left) ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
-        return OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, controller);
+        if (!TryGetHandBWorldPosition(out Vector3 worldPosition))
+        {
+            localPosition = Vector3.zero;
+            return false;
+        }
+
+        localPosition = transform.InverseTransformPoint(worldPosition);
+        return true;
     }
+
+    private bool GetHandBIndexPressed()
+    {
+        bool isLeftHand = IsLeftController(handBController);
+        if (!TryGetIndexTriggerValueFromInputSystem(isLeftHand, out float value))
+        {
+            value = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, handBController);
+        }
+
+        if (!handBIndexHeld && value >= IndexPressThreshold)
+        {
+            handBIndexHeld = true;
+        }
+        else if (handBIndexHeld && value <= IndexReleaseThreshold)
+        {
+            handBIndexHeld = false;
+        }
+
+        return handBIndexHeld;
+    }
+
+    private bool IsLeftController(OVRInput.Controller controller)
+    {
+        return (controller & OVRInput.Controller.LTouch) != 0 || (controller & OVRInput.Controller.LHand) != 0;
+    }
+
+    private bool TryGetIndexTriggerValueFromInputSystem(bool isLeftHand, out float value)
+    {
+#if ENABLE_INPUT_SYSTEM
+        bool foundDevice = false;
+        foreach (var dev in InputSystem.devices)
+        {
+            if (dev is XRController xr)
+            {
+                bool deviceIsLeft = IsLeftHandDevice(xr);
+                if (deviceIsLeft != isLeftHand)
+                {
+                    continue;
+                }
+
+                foundDevice = true;
+                var triggerControl = xr.TryGetChildControl<InputControl>("trigger");
+                if (triggerControl is AxisControl triggerAxis)
+                {
+                    value = triggerAxis.ReadValue();
+                    return true;
+                }
+
+                if (triggerControl is ButtonControl triggerButton)
+                {
+                    value = triggerButton.isPressed ? 1f : 0f;
+                    return true;
+                }
+            }
+        }
+
+        if (foundDevice)
+        {
+            value = 0f;
+            return true;
+        }
+#endif
+
+        value = 0f;
+        return false;
+    }
+
+#if ENABLE_INPUT_SYSTEM
+    private bool IsLeftHandDevice(XRController device)
+    {
+        if (device.name.Contains("Left") || device.name.Contains("left"))
+            return true;
+        if (device.name.Contains("Right") || device.name.Contains("right"))
+            return false;
+
+        if (device.path.Contains("lefthand"))
+            return true;
+        if (device.path.Contains("righthand"))
+            return false;
+
+        int xrControllerIndex = -1;
+        int xrControllerCount = 0;
+
+        foreach (var dev in InputSystem.devices)
+        {
+            if (dev is XRController)
+            {
+                if (dev == device)
+                    xrControllerIndex = xrControllerCount;
+                xrControllerCount++;
+            }
+        }
+
+        return xrControllerIndex == 0;
+    }
+#endif
 
     private CanvasGripManager.ActiveHand? GetHandGrippingThisCanvas()
     {
         if (CanvasGripManager.Instance == null) return null;
-        
+
         if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Left) == selectionScript)
             return CanvasGripManager.ActiveHand.Left;
-        
+
         if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Right) == selectionScript)
             return CanvasGripManager.ActiveHand.Right;
 
