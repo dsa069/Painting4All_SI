@@ -126,23 +126,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83b2066cc0c41bf4a9a83f19174db244, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CanvasDynamicResizer
-  resizeSensitivity: 1
+  resizeSensitivity: 0.3
   minScale: {x: 0.5, y: 0.5, z: 0.5}
   maxScale: {x: 3, y: 3, z: 3}
-  raycastMaxDistance: 100
-  leftControllerTransform: {fileID: 0}
-  rightControllerTransform: {fileID: 0}
-  handleSizeLocal: {x: 2, y: 2}
-  handleDepthLocal: 2
-  logEdgeHits: 1
-  autoCreateHandles: 1
-  handleLayerName: ResizeHandle
-  onlyRaycastHandles: 1
   handleLayerMask:
     serializedVersion: 2
     m_Bits: 0
-  isHeldByHandA: 0
-  isResizing: 0
+  leftControllerTransform: {fileID: 0}
+  rightControllerTransform: {fileID: 0}
+  triggerPressThreshold: 0.1
+  triggerReleaseThreshold: 0.05
+  useCanvasSurfaceFallback: 1
+  edgeZonePercent: 0.15
+  resizeMovementDeadZone: 0.0025
 --- !u!114 &3585294285949927493
 MonoBehaviour:
   m_ObjectHideFlags: 0

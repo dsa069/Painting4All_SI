@@ -7,7 +7,7 @@ using System;
 public class CanvasDynamicResizer : MonoBehaviour
 {
     [Header("Configuración de Escala")]
-    public float resizeSensitivity = 1.5f;
+    public float resizeSensitivity = 0.3f;
     public Vector3 minScale = new Vector3(0.1f, 0.1f, 0.1f);
     public Vector3 maxScale = new Vector3(5.0f, 5.0f, 5.0f);
 
