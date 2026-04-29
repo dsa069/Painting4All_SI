@@ -162,11 +162,11 @@ public class CanvasGripManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Bloquea la pintura si la mano opuesta está sujetando un lienzo
+    /// Bloquea la pintura si esta mano o la mano opuesta está sujetando un lienzo
     /// </summary>
     public bool IsPaintBlockedByGrip(ActiveHand paintHand)
     {
-        return IsHandAlreadyGripping(GetOppositeHand(paintHand));
+        return IsHandAlreadyGripping(paintHand) || IsHandAlreadyGripping(GetOppositeHand(paintHand));
     }
 
     #if UNITY_EDITOR
