@@ -144,32 +144,89 @@ public class Menu : MonoBehaviour
 
 	private void Update()
     {
-        bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // X
-        bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // A
+        // 1. Detectar inputs de los controladores de Meta (Botones X y A)
+        bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // Mano Izquierda (X)
+        bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // Mano Derecha (A)
 
+        // 2. Detectar gestos B2 (Queda preparado en el código, aunque nos centremos en mandos por ahora)
         bool b2LeftNow = (gestureController != null) && gestureController.IsB2ActiveLeft;
         bool b2RightNow = (gestureController != null) && gestureController.IsB2ActiveRight;
 
-        if (xPressed || (b2LeftNow && !wasB2LeftActiveLastFrame))
+        // Validar si se disparó la acción en este frame (Mano Izquierda o Derecha)
+        bool leftActionTriggered = xPressed || (b2LeftNow && !wasB2LeftActiveLastFrame);
+        bool rightActionTriggered = aPressed || (b2RightNow && !wasB2RightActiveLastFrame);
+
+        if (leftActionTriggered)
         {
-			Debug.Log("Menu: input detectado -> X=true, A=false");
-            HandleMenuButtonPressed(OVRInput.Controller.LTouch);
+            // Acciona la Mano Izquierda. Comprobamos el estado de la Mano Derecha.
+            ProcesarAccionContextual(CanvasGripManager.ActiveHand.Left, CanvasGripManager.ActiveHand.Right, OVRInput.Controller.LTouch);
         }
-        else if (aPressed || (b2RightNow && !wasB2RightActiveLastFrame))
+        else if (rightActionTriggered)
         {
-			Debug.Log("Menu: input detectado -> X=false, A=true");
-            HandleMenuButtonPressed(OVRInput.Controller.RTouch);
+            // Acciona la Mano Derecha. Comprobamos el estado de la Mano Izquierda.
+            ProcesarAccionContextual(CanvasGripManager.ActiveHand.Right, CanvasGripManager.ActiveHand.Left, OVRInput.Controller.RTouch);
         }
 
         wasB2LeftActiveLastFrame = b2LeftNow;
         wasB2RightActiveLastFrame = b2RightNow;
 
+        // Lógica de posicionamiento del menú existente
         if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
         {
             PositionMenuAboveOpeningController();
         }
 
         HandleMenuTriggerInteraction();
+    }
+
+    /// <summary>
+    /// Lógica central de interacción cruzada: Evalúa si la mano opuesta sostiene un lienzo.
+    /// Si es así, exporta. Si no, abre el menú.
+    /// </summary>
+    private void ProcesarAccionContextual(CanvasGripManager.ActiveHand manoAccion, CanvasGripManager.ActiveHand manoOpuesta, OVRInput.Controller mandoInteraccion)
+    {
+        // NOTA DE ROBUSTEZ: Si la misma mano que intenta accionar (X/A) es la que está sujetando el lienzo,
+        // podríamos bloquear la acción. Por ahora, permitimos que se abra el menú o simplemente no haga nada.
+        if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoAccion))
+        {
+            Debug.Log($"[Menu] La mano {manoAccion} está sujetando un objeto. Se ignora el intento de exportar/menú para evitar conflictos físicos.");
+            return;
+        }
+
+        // REGLA DE PRIORIDAD: Comprobamos si la MANO OPUESTA está sujetando un lienzo
+        if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoOpuesta))
+        {
+            // HAY un lienzo seleccionado por la otra mano: NO abrimos menú, EXPORTAMOS.
+            Seleccionar_Lienzo lienzoSujeto = CanvasGripManager.Instance.GetGrippedCanvas(manoOpuesta);
+            if (lienzoSujeto != null)
+            {
+                ExportarLienzo(lienzoSujeto.gameObject);
+            }
+        }
+        else
+        {
+            // NO hay lienzo seleccionado por la mano opuesta: Comportamiento por defecto (Abrir menú).
+            AbrirMenu(mandoInteraccion);
+        }
+    }
+
+    /// <summary>
+    /// Función placeholder solicitada para abrir el menú general.
+    /// Envuelve la lógica existente de HandleMenuButtonPressed.
+    /// </summary>
+    private void AbrirMenu(OVRInput.Controller pressedController)
+    {
+        Debug.Log($"[Menu] No hay lienzos sujetos. Abriendo menú con {pressedController}");
+        HandleMenuButtonPressed(pressedController);
+    }
+
+    /// <summary>
+    /// Función placeholder solicitada para exportar el lienzo.
+    /// </summary>
+    private void ExportarLienzo(GameObject lienzo)
+    {
+        Debug.Log($"[Menu/Exportación] ¡Acción cruzada detectada! Exportando el lienzo: {lienzo.name}");
+        // TODO: Implementar lógica de guardado/serialización aquí en el futuro
     }
 
 	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
