@@ -1,604 +1,209 @@
 using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
-#endif
 
 public class CanvasDynamicResizer : MonoBehaviour
 {
-    [Header("Configuración")]
-    public float resizeSensitivity = 1.0f;
-    public Vector3 minScale = new Vector3(0.5f, 0.5f, 0.5f);
-    public Vector3 maxScale = new Vector3(3.0f, 3.0f, 3.0f);
+    [Header("Configuración de Escala")]
+    public float resizeSensitivity = 1.5f;
+    public Vector3 minScale = new Vector3(0.1f, 0.1f, 0.1f);
+    public Vector3 maxScale = new Vector3(5.0f, 5.0f, 5.0f);
 
-    [Header("Detección de bordes")]
-    [SerializeField] private float raycastMaxDistance = 100f;
+    [Header("Referencias y Capas")]
+    [Tooltip("Asigna aquí la capa ResizeHandle")]
+    [SerializeField] private LayerMask handleLayerMask; 
     [SerializeField] private Transform leftControllerTransform;
     [SerializeField] private Transform rightControllerTransform;
-    [SerializeField] private Vector2 handleSizeLocal = new Vector2(2f, 2f);
-    [SerializeField] private float handleDepthLocal = 2f;
-    [SerializeField] private bool logEdgeHits = false;
-    [SerializeField] private bool autoCreateHandles = true;
-    [SerializeField] private string handleLayerName = "ResizeHandle";
-    [SerializeField] private bool onlyRaycastHandles = true;
 
-    [Header("Raycast Settings")]
-    // Asigna esto en el Inspector a la capa "ResizeHandles"
-    [SerializeField] private LayerMask handleLayerMask;
-
-    [Header("Estado Interno (Solo lectura)")]
-    public bool isHeldByHandA = false;
-    public bool isResizing = false;
-
-    // Referencias para el cálculo
-    private Vector3 initialHandLocalPosition;
-    private Vector3 initialCanvasScale;
-    private OVRInput.Controller handAController;
-    private OVRInput.Controller handBController;
-
-
-    // Tipo de borde interactuado
-    private enum ResizeAxis { None, Horizontal, Vertical, Proportional }
-    private ResizeAxis currentResizeAxis = ResizeAxis.None;
-
+    // Estado Interno
+    private bool isResizing = false;
+    private CanvasResizeHandleKind currentHandleKind;
+    private Vector3 initialScale;
+    private Vector3 lastHandLocalPos;
     private Seleccionar_Lienzo selectionScript;
-
-
-    private bool triedAutoDetectControllers;
 
     private void Awake()
     {
-        selectionScript = GetComponentInParent<Seleccionar_Lienzo>();
-        TryAutoDetectControllers();
-        EnsureHandleColliders();
-        ApplyHandleSizes();
-    }
-
-    private void OnValidate()
-    {
-        EnsureHandleColliders();
-        ApplyHandleSizes();
-    }
-
-    void Update()
-    {
-        HandleHoldLogic();
-
-        // RESTRICCIÓN: Solo si está sujeto por la Mano A, evaluamos la Mano B
-        if (isHeldByHandA)
+        selectionScript = GetComponent<Seleccionar_Lienzo>();
+        
+        // 🛡️ SISTEMA DE SEGURIDAD SENIOR: 
+        int handleLayerIndex = (int)Mathf.Log(handleLayerMask.value, 2);
+        if (gameObject.layer == handleLayerIndex && handleLayerIndex > 0)
         {
-            HandleResizeLogic();
-        }
-        else
-        {
-            // Si no está sujeto, nos aseguramos de cancelar cualquier redimensión activa
-            if (isResizing) StopResizing();
+            Debug.LogWarning($"[CanvasResizer] Cambiando layer del lienzo '{gameObject.name}' a Default para evitar bloqueos de Raycast.");
+            gameObject.layer = LayerMask.NameToLayer("Default");
         }
     }
 
-    private void HandleHoldLogic()
+    private void Update()
     {
-        CanvasGripManager.ActiveHand? grippingHand = GetHandGrippingThisCanvas();
-        if (grippingHand.HasValue)
-        {
-            isHeldByHandA = true;
-            handAController = grippingHand.Value == CanvasGripManager.ActiveHand.Left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
-            handBController = grippingHand.Value == CanvasGripManager.ActiveHand.Left ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
-            return;
-        }
-
-        if (CanvasGripManager.Instance != null)
-        {
-            isHeldByHandA = false;
-            return;
-        }
-
-        bool leftGrip = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch);
-        bool rightGrip = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.RTouch);
-
-        if (!isHeldByHandA && (leftGrip || rightGrip))
-        {
-            isHeldByHandA = true;
-            handAController = leftGrip ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
-            handBController = leftGrip ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
-        }
-        else if (isHeldByHandA && !OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, handAController))
-        {
-            isHeldByHandA = false;
-        }
+        HandleResizeLogic();
     }
 
     private void HandleResizeLogic()
     {
-        bool handBIndex = GetHandBIndexPressed();
-
-        if (handBIndex && !isResizing)
+        // 1. Identificar si ALGUIEN sujeta el lienzo (Mano A)
+        var gripHand = GetHandGrippingThisCanvas();
+        if (gripHand == null)
         {
-            // AQUÍ: Lógica de detección del borde (Raycast o Collider overlap)
-            // Supongamos que tienes un método que te devuelve qué borde estás tocando
-            GameObject touchedEdge = CheckIfHandBIsTouchingEdge(); 
-
-            if (touchedEdge != null)
-            {
-                StartResizing(touchedEdge);
-            }
+            if (isResizing) StopResizing();
+            return;
         }
-        else if (!handBIndex && isResizing)
+
+        // 2. Definir cuál es la Mano B (la que va a estirar)
+        CanvasGripManager.ActiveHand handB = (gripHand == CanvasGripManager.ActiveHand.Left) 
+            ? CanvasGripManager.ActiveHand.Right 
+            : CanvasGripManager.ActiveHand.Left;
+
+        // 3. Detectar Gatillo Frontal (Index Trigger) en Mano B usando OpenXR / Nuevo Input System
+        bool triggerPressed = GetIndexTriggerDown(handB);
+
+        if (triggerPressed && !isResizing)
+        {
+            TryStartResizing(handB);
+        }
+        else if (!triggerPressed && isResizing)
         {
             StopResizing();
         }
 
         if (isResizing)
         {
-            ApplyResize();
+            ApplyResize(handB);
         }
     }
 
-    private void StartResizing(GameObject edge)
+    private void TryStartResizing(CanvasGripManager.ActiveHand hand)
     {
-        CanvasResizeHandleMarker marker = edge.GetComponent<CanvasResizeHandleMarker>();
-        if (marker == null)
+        Transform controllerT = GetControllerTransform(hand);
+        if (controllerT == null) return;
+
+        Ray ray = new Ray(controllerT.position, controllerT.forward);
+        
+        // Usamos RaycastAll para atravesar interferencias
+        RaycastHit[] hits = Physics.RaycastAll(ray, 10f, handleLayerMask, QueryTriggerInteraction.Collide);
+        
+        foreach (var hit in hits)
         {
-            currentResizeAxis = ResizeAxis.None;
-            return;
+            CanvasResizeHandleMarker handle = hit.collider.GetComponent<CanvasResizeHandleMarker>();
+            if (handle != null)
+            {
+                isResizing = true;
+                currentHandleKind = handle.Kind;
+                initialScale = transform.localScale;
+                
+                // Calculamos posición local
+                lastHandLocalPos = transform.InverseTransformPoint(controllerT.position);
+                Debug.Log($"[CanvasDynamicResizer] Iniciando resize en: {currentHandleKind}");
+                return; // Borde encontrado, salimos
+            }
         }
+    }
 
-        if (!TryGetHandBLocalPosition(out initialHandLocalPosition))
+    private void ApplyResize(CanvasGripManager.ActiveHand hand)
+    {
+        Transform controllerT = GetControllerTransform(hand);
+        Vector3 currentHandLocalPos = transform.InverseTransformPoint(controllerT.position);
+        Vector3 delta = currentHandLocalPos - lastHandLocalPos;
+
+        Vector3 newScale = transform.localScale;
+
+        // Lógica de expansión
+        switch (currentHandleKind)
         {
-            currentResizeAxis = ResizeAxis.None;
-            return;
-        }
-
-        isResizing = true;
-        initialCanvasScale = transform.localScale;
-
-        switch (marker.Kind)
-        {
-            case CanvasResizeHandleKind.EdgeLeft:
             case CanvasResizeHandleKind.EdgeRight:
-                currentResizeAxis = ResizeAxis.Horizontal;
+                newScale.x += delta.x * resizeSensitivity;
+                break;
+            case CanvasResizeHandleKind.EdgeLeft:
+                newScale.x -= delta.x * resizeSensitivity;
                 break;
             case CanvasResizeHandleKind.EdgeTop:
-            case CanvasResizeHandleKind.EdgeBottom:
-                currentResizeAxis = ResizeAxis.Vertical;
+                newScale.y += delta.y * resizeSensitivity;
                 break;
-            default:
-                currentResizeAxis = ResizeAxis.Proportional;
+            case CanvasResizeHandleKind.EdgeBottom:
+                newScale.y -= delta.y * resizeSensitivity;
+                break;
+            case CanvasResizeHandleKind.CornerTopRight:
+                float growTR = (delta.x + delta.y) * 0.5f;
+                newScale += new Vector3(growTR, growTR, 0) * resizeSensitivity;
+                break;
+            case CanvasResizeHandleKind.CornerTopLeft:
+                float growTL = (-delta.x + delta.y) * 0.5f;
+                newScale += new Vector3(growTL, growTL, 0) * resizeSensitivity;
+                break;
+            case CanvasResizeHandleKind.CornerBottomRight:
+                float growBR = (delta.x - delta.y) * 0.5f;
+                newScale += new Vector3(growBR, growBR, 0) * resizeSensitivity;
+                break;
+            case CanvasResizeHandleKind.CornerBottomLeft:
+                float growBL = (-delta.x - delta.y) * 0.5f;
+                newScale += new Vector3(growBL, growBL, 0) * resizeSensitivity;
                 break;
         }
+
+        // Aplicar límites
+        newScale.x = Mathf.Clamp(newScale.x, minScale.x, maxScale.x);
+        newScale.y = Mathf.Clamp(newScale.y, minScale.y, maxScale.y);
+        newScale.z = initialScale.z; // El grosor Z no cambia
+
+        transform.localScale = newScale;
+        lastHandLocalPos = currentHandLocalPos;
     }
 
     private void StopResizing()
     {
+        if (isResizing) Debug.Log("[CanvasDynamicResizer] Resize finalizado.");
         isResizing = false;
-        currentResizeAxis = ResizeAxis.None;
     }
 
-    private void ApplyResize()
+    // --- MÉTODOS DE AYUDA ---
+
+    private Transform GetControllerTransform(CanvasGripManager.ActiveHand hand)
     {
-        if (!TryGetHandBLocalPosition(out Vector3 currentHandLocalPos))
+        if (leftControllerTransform == null || rightControllerTransform == null)
         {
-            StopResizing();
-            return;
+            leftControllerTransform = GameObject.Find("LeftControllerAnchor")?.transform;
+            rightControllerTransform = GameObject.Find("RightControllerAnchor")?.transform;
         }
-
-        Vector3 localMovement = currentHandLocalPos - initialHandLocalPosition;
-
-        Vector3 newScale = initialCanvasScale;
-
-        // 3. Aplicar la matemática según el eje
-        switch (currentResizeAxis)
-        {
-            case ResizeAxis.Horizontal:
-                newScale.x += localMovement.x * resizeSensitivity;
-                break;
-            case ResizeAxis.Vertical:
-                newScale.y += localMovement.y * resizeSensitivity;
-                break;
-            case ResizeAxis.Proportional:
-                // Usamos la magnitud o el promedio del movimiento para escalar uniformemente
-                float uniformScale = (localMovement.x + localMovement.y) * resizeSensitivity;
-                newScale += new Vector3(uniformScale, uniformScale, uniformScale);
-                break;
-        }
-
-        // 4. Aplicar límites de seguridad (Clamp) para que no se invierta o crezca infinitamente
-        newScale.x = Mathf.Clamp(newScale.x, minScale.x, maxScale.x);
-        newScale.y = Mathf.Clamp(newScale.y, minScale.y, maxScale.y);
-        newScale.z = Mathf.Clamp(newScale.z, minScale.z, maxScale.z);
-
-        // 5. Asignar la nueva escala
-        transform.localScale = newScale;
+        return (hand == CanvasGripManager.ActiveHand.Left) ? leftControllerTransform : rightControllerTransform;
     }
 
-    // Método simulado: Sustituye esto por tu sistema actual de detección (Triggers o Raycast)
-    private GameObject CheckIfHandBIsTouchingEdge()
+    // 🔥 FIX VITAL: AHORA LEE EL GATILLO FRONTAL USANDO EL MISMO SISTEMA QUE SELECCIONAR_LIENZO
+    private bool GetIndexTriggerDown(CanvasGripManager.ActiveHand hand)
     {
-        Transform controller = GetControllerTransform(handBController);
-        if (controller == null)
+        foreach (var device in InputSystem.devices)
         {
-            TryAutoDetectControllers();
-            controller = GetControllerTransform(handBController);
-            if (controller == null)
+            if (device is XRController controller)
             {
-                return null;
-            }
-        }
-
-        Ray ray = new Ray(controller.position, controller.forward);
-        int mask = handleLayerMask.value != 0 ? handleLayerMask.value : GetHandleLayerMask();
-        RaycastHit[] hits = Physics.RaycastAll(ray, raycastMaxDistance, mask, QueryTriggerInteraction.Collide);
-        if (hits == null || hits.Length == 0)
-        {
-            return null;
-        }
-
-        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-        for (int i = 0; i < hits.Length; i++)
-        {
-            CanvasResizeHandleMarker marker = hits[i].collider.GetComponentInParent<CanvasResizeHandleMarker>();
-            if (marker != null && IsHandleForThisCanvas(marker))
-            {
-                if (logEdgeHits)
+                // Identificamos si este mando es el Izquierdo o el Derecho
+                bool isLeft = controller.name.ToLower().Contains("left") || controller.path.ToLower().Contains("lefthand");
+                
+                if ((hand == CanvasGripManager.ActiveHand.Left && isLeft) || 
+                    (hand == CanvasGripManager.ActiveHand.Right && !isLeft))
                 {
-                    Debug.Log($"[CanvasDynamicResizer] Hit handle {marker.Kind} with {hits[i].collider.name}", hits[i].collider);
+                    // Leemos el gatillo frontal ("trigger")
+                    var triggerControl = controller.TryGetChildControl<AxisControl>("trigger");
+                    if (triggerControl != null)
+                    {
+                        return triggerControl.ReadValue() > 0.5f; // Retorna true si está pulsado a más de la mitad
+                    }
                 }
-                return marker.gameObject;
             }
         }
-
-        if (logEdgeHits)
-        {
-            string hitList = string.Empty;
-            int maxLogHits = Mathf.Min(4, hits.Length);
-            for (int i = 0; i < maxLogHits; i++)
-            {
-                Collider col = hits[i].collider;
-                hitList += $"{col.name} (layer {LayerMask.LayerToName(col.gameObject.layer)}), ";
-            }
-            Debug.Log($"[CanvasDynamicResizer] Raycast hit, but no CanvasResizeHandleMarker found. First hits: {hitList}");
-        }
-
-        return null;
-    }
-
-    private void ApplyHandleSizes()
-    {
-        CanvasResizeHandleMarker[] markers = GetComponentsInChildren<CanvasResizeHandleMarker>(true);
-        for (int i = 0; i < markers.Length; i++)
-        {
-            BoxCollider box = markers[i].GetComponent<BoxCollider>();
-            if (box == null)
-            {
-                continue;
-            }
-
-            box.isTrigger = true;
-            box.size = new Vector3(handleSizeLocal.x, handleSizeLocal.y, handleDepthLocal);
-            ApplyHandleLayer(markers[i].gameObject);
-        }
-    }
-
-    private void EnsureHandleColliders()
-    {
-        if (!autoCreateHandles)
-        {
-            return;
-        }
-
-        Transform existingRoot = transform.Find("ResizeHandles");
-        if (existingRoot != null)
-        {
-            if (existingRoot.childCount == 0)
-            {
-                CreateHandleChildren(existingRoot);
-            }
-
-            return;
-        }
-
-        GameObject rootObj = new GameObject("ResizeHandles");
-        rootObj.transform.SetParent(transform, false);
-        CreateHandleChildren(rootObj.transform);
-    }
-
-    private void CreateHandleChildren(Transform root)
-    {
-        Vector2 half = GetCanvasHalfSizeLocal();
-
-        CreateHandle(root, "CornerTopLeft", new Vector3(-half.x, half.y, 0f), CanvasResizeHandleKind.CornerTopLeft);
-        CreateHandle(root, "CornerTopRight", new Vector3(half.x, half.y, 0f), CanvasResizeHandleKind.CornerTopRight);
-        CreateHandle(root, "CornerBottomLeft", new Vector3(-half.x, -half.y, 0f), CanvasResizeHandleKind.CornerBottomLeft);
-        CreateHandle(root, "CornerBottomRight", new Vector3(half.x, -half.y, 0f), CanvasResizeHandleKind.CornerBottomRight);
-
-        CreateHandle(root, "EdgeTop", new Vector3(0f, half.y, 0f), CanvasResizeHandleKind.EdgeTop);
-        CreateHandle(root, "EdgeBottom", new Vector3(0f, -half.y, 0f), CanvasResizeHandleKind.EdgeBottom);
-        CreateHandle(root, "EdgeLeft", new Vector3(-half.x, 0f, 0f), CanvasResizeHandleKind.EdgeLeft);
-        CreateHandle(root, "EdgeRight", new Vector3(half.x, 0f, 0f), CanvasResizeHandleKind.EdgeRight);
-    }
-
-    private void CreateHandle(Transform root, string handleName, Vector3 localPos, CanvasResizeHandleKind kind)
-    {
-        GameObject h = new GameObject(handleName);
-        h.transform.SetParent(root, false);
-        h.transform.localPosition = localPos;
-        h.transform.localRotation = Quaternion.identity;
-        ApplyHandleLayer(h);
-
-        BoxCollider col = h.AddComponent<BoxCollider>();
-        col.isTrigger = true;
-        col.size = new Vector3(handleSizeLocal.x, handleSizeLocal.y, handleDepthLocal);
-
-        CanvasResizeHandleMarker marker = h.AddComponent<CanvasResizeHandleMarker>();
-        marker.Initialize(kind);
-    }
-
-    private int GetHandleLayerMask()
-    {
-        if (!onlyRaycastHandles)
-        {
-            return ~0;
-        }
-
-        int layer = LayerMask.NameToLayer(handleLayerName);
-        if (layer < 0)
-        {
-            return ~0;
-        }
-
-        return 1 << layer;
-    }
-
-    private void ApplyHandleLayer(GameObject handle)
-    {
-        int layer = LayerMask.NameToLayer(handleLayerName);
-        if (layer >= 0)
-        {
-            handle.layer = layer;
-        }
-    }
-
-    private Vector2 GetCanvasHalfSizeLocal()
-    {
-        BoxCollider box = GetComponent<Collider>() as BoxCollider;
-        if (box != null)
-        {
-            Vector3 half = box.size * 0.5f;
-            return new Vector2(Mathf.Abs(half.x), Mathf.Abs(half.y));
-        }
-
-        SpriteRenderer sr = GetComponent<SpriteRenderer>();
-        if (sr != null && sr.sprite != null)
-        {
-            float ppu = sr.sprite.pixelsPerUnit;
-            Rect rect = sr.sprite.rect;
-            return new Vector2(rect.width / ppu * 0.5f, rect.height / ppu * 0.5f);
-        }
-
-        Renderer r = GetComponent<Renderer>();
-        if (r != null)
-        {
-            Vector3 localExtents = transform.InverseTransformVector(r.bounds.extents);
-            return new Vector2(Mathf.Abs(localExtents.x), Mathf.Abs(localExtents.y));
-        }
-
-        return new Vector2(0.5f, 0.5f);
-    }
-
-    private Transform GetControllerTransform(OVRInput.Controller controller)
-    {
-        if ((controller & OVRInput.Controller.LTouch) != 0 || (controller & OVRInput.Controller.LHand) != 0)
-        {
-            return leftControllerTransform;
-        }
-
-        if ((controller & OVRInput.Controller.RTouch) != 0 || (controller & OVRInput.Controller.RHand) != 0)
-        {
-            return rightControllerTransform;
-        }
-
-        return null;
-    }
-
-    private void TryAutoDetectControllers()
-    {
-        if (triedAutoDetectControllers)
-        {
-            return;
-        }
-
-        triedAutoDetectControllers = true;
-        if (leftControllerTransform != null && rightControllerTransform != null)
-        {
-            return;
-        }
-
-        Transform[] allObjects = FindObjectsOfType<Transform>();
-        foreach (Transform t in allObjects)
-        {
-            string name = t.name;
-            if (name.Contains("Detached"))
-            {
-                continue;
-            }
-
-            if (leftControllerTransform == null && (name == "LeftControllerAnchor" || name == "LeftHand" || name == "LeftHandAnchor" ||
-                (name.Contains("Left") && (name.Contains("Controller") || name.Contains("Hand")))))
-            {
-                leftControllerTransform = t;
-            }
-
-            if (rightControllerTransform == null && (name == "RightControllerAnchor" || name == "RightHand" || name == "RightHandAnchor" ||
-                (name.Contains("Right") && (name.Contains("Controller") || name.Contains("Hand")))))
-            {
-                rightControllerTransform = t;
-            }
-
-            if (leftControllerTransform != null && rightControllerTransform != null)
-            {
-                return;
-            }
-        }
-    }
-
-    private bool TryGetHandBWorldPosition(out Vector3 worldPosition)
-    {
-        Transform controller = GetControllerTransform(handBController);
-        if (controller == null)
-        {
-            TryAutoDetectControllers();
-            controller = GetControllerTransform(handBController);
-        }
-
-        if (controller == null)
-        {
-            worldPosition = Vector3.zero;
-            return false;
-        }
-
-        worldPosition = controller.position;
-        return true;
-    }
-
-    private bool TryGetHandBLocalPosition(out Vector3 localPosition)
-    {
-        if (!TryGetHandBWorldPosition(out Vector3 worldPosition))
-        {
-            localPosition = Vector3.zero;
-            return false;
-        }
-
-        localPosition = transform.InverseTransformPoint(worldPosition);
-        return true;
-    }
-
-    private bool GetHandBIndexPressed()
-    {
-        if (OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, handBController))
-        {
-            return true;
-        }
-
-        bool isLeftHand = IsLeftController(handBController);
-        if (TryGetIndexTriggerValueFromInputSystem(isLeftHand, out float inputSystemValue))
-        {
-            return inputSystemValue > 0.1f;
-        }
-
         return false;
     }
-
-    private bool IsLeftController(OVRInput.Controller controller)
-    {
-        return (controller & OVRInput.Controller.LTouch) != 0 || (controller & OVRInput.Controller.LHand) != 0;
-    }
-
-    private bool TryGetIndexTriggerValueFromInputSystem(bool isLeftHand, out float value)
-    {
-#if ENABLE_INPUT_SYSTEM
-        bool foundDevice = false;
-        foreach (var dev in InputSystem.devices)
-        {
-            if (dev is XRController xr)
-            {
-                bool deviceIsLeft = IsLeftHandDevice(xr);
-                if (deviceIsLeft != isLeftHand)
-                {
-                    continue;
-                }
-
-                foundDevice = true;
-                var triggerControl = xr.TryGetChildControl<InputControl>("trigger");
-                if (triggerControl is AxisControl triggerAxis)
-                {
-                    value = triggerAxis.ReadValue();
-                    return true;
-                }
-
-                if (triggerControl is ButtonControl triggerButton)
-                {
-                    value = triggerButton.isPressed ? 1f : 0f;
-                    return true;
-                }
-            }
-        }
-
-        if (foundDevice)
-        {
-            value = 0f;
-            return true;
-        }
-#endif
-
-        value = 0f;
-        return false;
-    }
-
-#if ENABLE_INPUT_SYSTEM
-    private bool IsLeftHandDevice(XRController device)
-    {
-        if (device.name.Contains("Left") || device.name.Contains("left"))
-            return true;
-        if (device.name.Contains("Right") || device.name.Contains("right"))
-            return false;
-
-        if (device.path.Contains("lefthand"))
-            return true;
-        if (device.path.Contains("righthand"))
-            return false;
-
-        int xrControllerIndex = -1;
-        int xrControllerCount = 0;
-
-        foreach (var dev in InputSystem.devices)
-        {
-            if (dev is XRController)
-            {
-                if (dev == device)
-                    xrControllerIndex = xrControllerCount;
-                xrControllerCount++;
-            }
-        }
-
-        return xrControllerIndex == 0;
-    }
-#endif
 
     private CanvasGripManager.ActiveHand? GetHandGrippingThisCanvas()
     {
         if (CanvasGripManager.Instance == null) return null;
-
-        Seleccionar_Lienzo leftCanvas = CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Left);
-        if (IsSameCanvas(leftCanvas))
+        
+        if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Left) == selectionScript)
             return CanvasGripManager.ActiveHand.Left;
-
-        Seleccionar_Lienzo rightCanvas = CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Right);
-        if (IsSameCanvas(rightCanvas))
+        
+        if (CanvasGripManager.Instance.GetGrippedCanvas(CanvasGripManager.ActiveHand.Right) == selectionScript)
             return CanvasGripManager.ActiveHand.Right;
 
         return null;
-    }
-
-    private bool IsSameCanvas(Seleccionar_Lienzo canvas)
-    {
-        if (canvas == null)
-        {
-            return false;
-        }
-
-        if (selectionScript != null)
-        {
-            return canvas == selectionScript;
-        }
-
-        return canvas.transform.root == transform.root;
-    }
-
-    private bool IsHandleForThisCanvas(CanvasResizeHandleMarker marker)
-    {
-        Transform owner = selectionScript != null ? selectionScript.transform : transform;
-        return marker.transform.IsChildOf(owner);
     }
 }
