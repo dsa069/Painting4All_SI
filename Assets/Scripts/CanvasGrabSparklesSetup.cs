@@ -110,7 +110,7 @@ public class CanvasGrabSparklesSetup : MonoBehaviour
         mainModule.prewarm = false;
         mainModule.startLifetime = 1.5f;                               // Vida fija para todas las partículas
         mainModule.startSpeed = 0f;                                    // Sin variación de movimiento inicial
-        mainModule.startSize = 0.008f;                                 // Tamaño fijo
+        mainModule.startSize = 0.01f;                                 // Tamaño fijo
         mainModule.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.8f, 0.2f, 1f)); // Dorado fijo
 
         // === EMISSION MODULE ===
