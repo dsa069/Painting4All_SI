@@ -196,33 +196,33 @@ public class Menu : MonoBehaviour
 
     /// <summary>
     /// Lógica central de interacción cruzada: Evalúa si la mano opuesta sostiene un lienzo.
-    /// Si es así, exporta. Si no, abre el menú.
+    /// Si es así, exporta. Si no, abre el menú (solo si la mano que presiona no está sosteniendo).
+    /// Permite exportación simultánea de ambos lienzos cuando ambas manos presionan.
     /// </summary>
     private void ProcesarAccionContextual(CanvasGripManager.ActiveHand manoAccion, CanvasGripManager.ActiveHand manoOpuesta, OVRInput.Controller mandoInteraccion)
     {
-        // NOTA DE ROBUSTEZ: Si la misma mano que intenta accionar (X/A) es la que está sujetando el lienzo,
-        // podríamos bloquear la acción. Por ahora, permitimos que se abra el menú o simplemente no haga nada.
-        if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoAccion))
-        {
-            Debug.Log($"[Menu] La mano {manoAccion} está sujetando un objeto. Se ignora el intento de exportar/menú para evitar conflictos físicos.");
-            return;
-        }
-
         // REGLA DE PRIORIDAD: Comprobamos si la MANO OPUESTA está sujetando un lienzo
         if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoOpuesta))
         {
-            // HAY un lienzo seleccionado por la otra mano: NO abrimos menú, EXPORTAMOS.
+            // HAY un lienzo seleccionado por la otra mano: EXPORTAMOS (incluso si esta mano también está sosteniendo).
             Seleccionar_Lienzo lienzoSujeto = CanvasGripManager.Instance.GetGrippedCanvas(manoOpuesta);
             if (lienzoSujeto != null)
             {
                 ExportarLienzo(lienzoSujeto.gameObject);
+                return;
             }
         }
-        else
+
+        // LA MANO OPUESTA NO está sosteniendo nada.
+        // Comprobamos si la MANO QUE PRESIONA está sosteniendo (para evitar conflictos físicos).
+        if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoAccion))
         {
-            // NO hay lienzo seleccionado por la mano opuesta: Comportamiento por defecto (Abrir menú).
-            AbrirMenu(mandoInteraccion);
+            Debug.Log($"[Menu] La mano {manoAccion} está sujetando un objeto y la mano opuesta no tiene lienzo. Se ignora para evitar conflictos físicos.");
+            return;
         }
+
+        // Comportamiento por defecto: Abrir menú.
+        AbrirMenu(mandoInteraccion);
     }
 
     /// <summary>
