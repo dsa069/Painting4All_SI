@@ -45,22 +45,27 @@ public class MenuHerramientasButtonHandler : MonoBehaviour
             case 0:
                 Debug.Log($"Has pulsado el boton de Pincel");
                 if (paintManager != null) paintManager.SetTool(ToolType.Pincel);
+                Menu.Instance?.CloseHerramientasMenu();
                 break;
             case 1:
                 Debug.Log($"Has pulsado el boton de Graffiti");
                 if (paintManager != null) paintManager.SetTool(ToolType.Graffiti);
+                Menu.Instance?.CloseHerramientasMenu();
                 break;
             case 2:
                 Debug.Log($"Has pulsado el boton de Acuarela");
                 if (paintManager != null) paintManager.SetTool(ToolType.Acuarela);
+                Menu.Instance?.CloseHerramientasMenu();
                 break;
             case 3:
                 Debug.Log($"Has pulsado el boton de Goma");
                 if (paintManager != null) paintManager.SetTool(ToolType.Goma);
+                Menu.Instance?.CloseHerramientasMenu();
                 break;
             case 4:
                 Debug.Log($"Has pulsado el boton de Mano");
                 if (paintManager != null) paintManager.SetTool(ToolType.Mano);
+                Menu.Instance?.CloseHerramientasMenu();
                 break;
             default:
                 Debug.Log("No encontrado");
