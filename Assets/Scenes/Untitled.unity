@@ -21321,6 +21321,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CanvasGrabFeedback
   particleDuration: -1
+  enableControllerParticles: 0
+  enableCanvasParticles: 1
 --- !u!4 &1285191969
 Transform:
   m_ObjectHideFlags: 0
@@ -34390,11 +34392,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4077226577444108677, guid: 9bfd6d5bcaaf8a64c8b4aa17ea4d5737, type: 3}
       propertyPath: InitialModule.startSizeY.minMaxState
-      value: 3
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4077226577444108677, guid: 9bfd6d5bcaaf8a64c8b4aa17ea4d5737, type: 3}
       propertyPath: InitialModule.startSizeZ.minMaxState
-      value: 3
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
