@@ -26,6 +26,8 @@ public struct HandPaintState
 
 public class Paint : MonoBehaviour
 {
+    public static ToolType globalCurrentTool = ToolType.Mano;
+
     [Header("Pointer")]
     public Transform rayOrigin;
     public KeyCode paintKey = KeyCode.JoystickButton0;
@@ -138,8 +140,8 @@ public class Paint : MonoBehaviour
         }
 
         // Initialize per-hand painting states
-        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Mano };
-        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Mano };
+        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = globalCurrentTool };
+        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = globalCurrentTool };
     }
 
     /// <summary>
@@ -631,8 +633,7 @@ public class Paint : MonoBehaviour
                             break;
                         
                         case ToolType.Graffiti:
-                            // Solo pinta el 15% de los píxeles aleatoriamente para efecto spray
-                            if (Random.value < 0.15f)
+                            if (Random.value < 0.07f)
                             {
                                 outc = Color.Lerp(src, col, col.a);
                             }
@@ -744,10 +745,16 @@ public class Paint : MonoBehaviour
 
     public void SetTool(ToolType newTool)
     {
-        // En ausencia de saber qué mano abrió el menú, se asume que
-        // queremos cambiar la herramienta para ambas manos por defecto.
-        leftHandState.currentTool = newTool;
-        rightHandState.currentTool = newTool;
-        Debug.Log($"Tool changed to: {newTool}");
+        globalCurrentTool = newTool;
+
+        // Apply to all existing Paint instances so they inherit the change immediately
+        Paint[] allPaints = FindObjectsOfType<Paint>();
+        foreach (var p in allPaints)
+        {
+            p.leftHandState.currentTool = newTool;
+            p.rightHandState.currentTool = newTool;
+        }
+
+        Debug.Log($"Tool changed to: {newTool} for all canvases.");
     }
 }
