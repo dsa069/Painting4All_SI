@@ -45,22 +45,37 @@ public class CanvasGrabSparklesSetup : MonoBehaviour
         ConfigureParticleSystem(ps);
         
         // Paso 5: Agregar Renderer (requerido para que sea visible)
-        ParticleSystemRenderer renderer = sparklesGO.GetComponent<ParticleSystemRenderer>();
-        if (renderer != null)
-        {
-            // Usar material default de partículas
-            Material particleMaterial = AssetDatabase.LoadAssetAtPath<Material>(
-                "Library/unity default resources/Default-Particle.mat"
-            );
-            
-            if (particleMaterial == null)
+            ParticleSystemRenderer renderer = sparklesGO.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
             {
-                // Fallback: crear material simple si no existe
-                particleMaterial = new Material(Shader.Find("Particles/Standard Unlit"));
+                // Intentar cargar un material ya existente creado para el prefab
+                string matPath = "Assets/Resources/ParticleFX/CanvasGrabSparkles_Mat.mat";
+                Material particleMaterial = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+
+                if (particleMaterial == null)
+                {
+                    // Buscar un shader URP/Particles o fallback
+                    Shader found = Shader.Find("Universal Render Pipeline/Particles/Lit")
+                                   ?? Shader.Find("Universal Render Pipeline/Lit")
+                                   ?? Shader.Find("Particles/Standard Unlit");
+
+                    if (found == null)
+                    {
+                        // Último recurso: usar Standard shader para evitar material missing
+                        found = Shader.Find("Standard");
+                    }
+
+                    particleMaterial = new Material(found ?? Shader.Find("Standard"));
+
+                    // Guardar el material en Assets para que el prefab lo referencie correctamente
+                    AssetDatabase.CreateAsset(particleMaterial, matPath);
+                    AssetDatabase.SaveAssets();
+                    AssetDatabase.Refresh();
+                }
+
+                // Asignar como sharedMaterial para que el prefab almacene la referencia al asset
+                renderer.sharedMaterial = particleMaterial;
             }
-            
-            renderer.material = particleMaterial;
-        }
 
         // Paso 6: Guardar como prefab
         string prefabPath = PREFAB_PATH;
@@ -96,7 +111,7 @@ public class CanvasGrabSparklesSetup : MonoBehaviour
         mainModule.prewarm = false;
         mainModule.startLifetime = new ParticleSystem.MinMaxCurve(1f, 2f);      // Vida más larga: 1-2s
         mainModule.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 2f);       // Velocidad más rápida: 0.8-2 m/s
-        mainModule.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.5f);     // GRANDE: 0.25-0.5 m (5x más grande)
+        mainModule.startSize = new ParticleSystem.MinMaxCurve(0.005f, 0.01f);     // GRANDE: 0.25-0.5 m (5x más grande)
         mainModule.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.8f, 0.2f, 1f)); // Dorado más saturado
 
         // === EMISSION MODULE ===
