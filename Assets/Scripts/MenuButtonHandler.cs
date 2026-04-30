@@ -59,12 +59,23 @@ public class MenuButtonHandler : MonoBehaviour
 				break;
 			case 4:
 				Debug.Log("Has pulsado el boton de Salir");
-				// TODO: Implementar logica aqui
+				SalirDelJuego();
 
 				break;
 			default:
 				Debug.Log("No encontrado");
 				break;
 		}
+	}
+
+	private void SalirDelJuego()
+	{
+		Debug.Log("MenuButtonHandler: Solicitando salida del juego.");
+
+		#if UNITY_EDITOR
+		UnityEditor.EditorApplication.isPlaying = false;
+		#else
+		Application.Quit();
+		#endif
 	}
 }
