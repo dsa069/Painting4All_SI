@@ -18,6 +18,8 @@ using System.Collections.Generic;
 public class CanvasGrabFeedback : MonoBehaviour
 {
     [SerializeField] private float particleDuration = -1f;  // -1 = indefinido (se controla manualmente)
+    [SerializeField] private bool enableControllerParticles = false;
+    [SerializeField] private bool enableCanvasParticles = true;
     
     private OVRCameraRig cameraRig;
     private Transform leftControllerTransform;
@@ -143,31 +145,37 @@ public class CanvasGrabFeedback : MonoBehaviour
             return;
         }
         
-        // Reproducir partículas EN EL CONTROLADOR (duración indefinida)
-        ParticleSystem controllerParticles = ParticleEffectManager.Instance.PlaySparklesAt(
-            controllerTransform.position, 
-            controllerTransform,
-            particleDuration  // -1 = indefinido
-        );
-        
-        if (controllerParticles != null)
+        // Reproducir partículas EN EL CONTROLADOR solo si está activado
+        if (enableControllerParticles)
         {
-            activeControllerParticles[key] = controllerParticles;
-            Debug.Log($"[CanvasGrabFeedback] ✨ Partículas INICIADAS EN CONTROLADOR {hand} (duración: indefinida)");
+            ParticleSystem controllerParticles = ParticleEffectManager.Instance.PlaySparklesAt(
+                controllerTransform.position, 
+                controllerTransform,
+                particleDuration  // -1 = indefinido
+            );
+
+            if (controllerParticles != null)
+            {
+                activeControllerParticles[key] = controllerParticles;
+                Debug.Log($"[CanvasGrabFeedback] ✨ Partículas INICIADAS EN CONTROLADOR {hand} (duración: indefinida)");
+            }
         }
         
         // Reproducir partículas EN EL LIENZO (centro)
-        ParticleSystem canvasParticles = ParticleEffectManager.Instance.PlaySparklesAt(
-            canvas.transform.position,
-            canvas.transform,
-            particleDuration  // -1 = indefinido
-        );
-        
-        if (canvasParticles != null)
+        if (enableCanvasParticles)
         {
-            string canvasKey = key + "_canvas";
-            activeCanvasParticles[canvasKey] = canvasParticles;
-            Debug.Log($"[CanvasGrabFeedback] ✨ Partículas INICIADAS EN LIENZO: {canvas.gameObject.name} (duración: indefinida)");
+            ParticleSystem canvasParticles = ParticleEffectManager.Instance.PlaySparklesAt(
+                canvas.transform.position,
+                canvas.transform,
+                particleDuration  // -1 = indefinido
+            );
+
+            if (canvasParticles != null)
+            {
+                string canvasKey = key + "_canvas";
+                activeCanvasParticles[canvasKey] = canvasParticles;
+                Debug.Log($"[CanvasGrabFeedback] ✨ Partículas INICIADAS EN LIENZO: {canvas.gameObject.name} (duración: indefinida)");
+            }
         }
     }
 
