@@ -48,30 +48,29 @@ public class CanvasGrabSparklesSetup : MonoBehaviour
             ParticleSystemRenderer renderer = sparklesGO.GetComponent<ParticleSystemRenderer>();
             if (renderer != null)
             {
-                // Intentar cargar un material ya existente creado para el prefab
+                // Crear o actualizar un material unlit para que el color no dependa de la luz
                 string matPath = "Assets/Resources/ParticleFX/CanvasGrabSparkles_Mat.mat";
+                Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                               ?? Shader.Find("Particles/Standard Unlit")
+                               ?? Shader.Find("Universal Render Pipeline/Unlit")
+                               ?? Shader.Find("Standard");
+
                 Material particleMaterial = AssetDatabase.LoadAssetAtPath<Material>(matPath);
 
                 if (particleMaterial == null)
                 {
-                    // Buscar un shader URP/Particles o fallback
-                    Shader found = Shader.Find("Universal Render Pipeline/Particles/Lit")
-                                   ?? Shader.Find("Universal Render Pipeline/Lit")
-                                   ?? Shader.Find("Particles/Standard Unlit");
-
-                    if (found == null)
-                    {
-                        // Último recurso: usar Standard shader para evitar material missing
-                        found = Shader.Find("Standard");
-                    }
-
-                    particleMaterial = new Material(found ?? Shader.Find("Standard"));
-
-                    // Guardar el material en Assets para que el prefab lo referencie correctamente
+                    particleMaterial = new Material(shader);
                     AssetDatabase.CreateAsset(particleMaterial, matPath);
-                    AssetDatabase.SaveAssets();
-                    AssetDatabase.Refresh();
                 }
+                else if (particleMaterial.shader != shader)
+                {
+                    particleMaterial.shader = shader;
+                    EditorUtility.SetDirty(particleMaterial);
+                }
+
+                particleMaterial.color = new Color(1f, 0.8f, 0.2f, 1f);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
 
                 // Asignar como sharedMaterial para que el prefab almacene la referencia al asset
                 renderer.sharedMaterial = particleMaterial;
@@ -109,10 +108,10 @@ public class CanvasGrabSparklesSetup : MonoBehaviour
         mainModule.duration = 10f;                                     // Duración larga (se controla manualmente)
         mainModule.loop = true;                                        // Loop para emisión continua
         mainModule.prewarm = false;
-        mainModule.startLifetime = new ParticleSystem.MinMaxCurve(1f, 2f);      // Vida más larga: 1-2s
-        mainModule.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 2f);       // Velocidad más rápida: 0.8-2 m/s
-        mainModule.startSize = new ParticleSystem.MinMaxCurve(0.005f, 0.01f);     // GRANDE: 0.25-0.5 m (5x más grande)
-        mainModule.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.8f, 0.2f, 1f)); // Dorado más saturado
+        mainModule.startLifetime = 1.5f;                               // Vida fija para todas las partículas
+        mainModule.startSpeed = 0f;                                    // Sin variación de movimiento inicial
+        mainModule.startSize = 0.008f;                                 // Tamaño fijo
+        mainModule.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.8f, 0.2f, 1f)); // Dorado fijo
 
         // === EMISSION MODULE ===
         ParticleSystem.EmissionModule emissionModule = ps.emission;
@@ -127,33 +126,16 @@ public class CanvasGrabSparklesSetup : MonoBehaviour
 
         // === VELOCITY OVER LIFETIME ===
         ParticleSystem.VelocityOverLifetimeModule velocityModule = ps.velocityOverLifetime;
-        velocityModule.enabled = true;
-        velocityModule.x = new ParticleSystem.MinMaxCurve(-1f, 1f);    // Mayor dispersión lateral
-        velocityModule.y = new ParticleSystem.MinMaxCurve(0.5f, 1.5f); // Movimiento hacia arriba y lateral
-        velocityModule.z = new ParticleSystem.MinMaxCurve(-1f, 1f);
+        velocityModule.enabled = false;
 
         // === SIZE OVER LIFETIME ===
         ParticleSystem.SizeOverLifetimeModule sizeModule = ps.sizeOverLifetime;
-        sizeModule.enabled = true;
-        AnimationCurve sizeCurve = AnimationCurve.EaseInOut(0, 1, 1, 0.3f);  // Decae pero se mantiene visible
-        sizeModule.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
+        sizeModule.enabled = false;
 
         // === ALPHA OVER LIFETIME (via Color) ===
+        // Desactivar para mantener color constante (evita efecto multicolor)
         ParticleSystem.ColorOverLifetimeModule colorModule = ps.colorOverLifetime;
-        colorModule.enabled = true;
-        Gradient alphaGradient = new Gradient();
-        alphaGradient.SetKeys(
-            new GradientColorKey[] { 
-                new GradientColorKey(new Color(1f, 0.8f, 0.2f, 1f), 0f),   // Dorado
-                new GradientColorKey(new Color(1f, 0.5f, 0f, 1f), 1f)      // Naranja al final
-            },
-            new GradientAlphaKey[] {
-                new GradientAlphaKey(1f, 0f),        // Opaco al inicio
-                new GradientAlphaKey(0.8f, 0.3f),    // Mayormente opaco durante vida
-                new GradientAlphaKey(0f, 1f)         // Fade out al final
-            }
-        );
-        colorModule.color = new ParticleSystem.MinMaxGradient(alphaGradient);
+        colorModule.enabled = false;
 
         // === RENDERER ===
         ParticleSystemRenderer renderer = ps.GetComponent<ParticleSystemRenderer>();
