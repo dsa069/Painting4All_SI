@@ -27,6 +27,8 @@ public class CanvasDynamicResizer : MonoBehaviour
     [Header("Estabilidad de Resize")]
     [SerializeField] private float resizeMovementDeadZone = 0.0025f;
 
+    private GestureUIController gestureController;
+
     // Estado Interno
     private bool isResizing = false;
     private CanvasResizeHandleKind currentHandleKind;
@@ -42,6 +44,7 @@ public class CanvasDynamicResizer : MonoBehaviour
 
     private void Awake()
     {
+        gestureController = FindObjectOfType<GestureUIController>();
         selectionScript = GetComponent<Seleccionar_Lienzo>();
         canvasCollider = GetComponent<Collider>();
         canvasSpriteRenderer = GetComponent<SpriteRenderer>();
@@ -280,14 +283,25 @@ public class CanvasDynamicResizer : MonoBehaviour
         return (hand == CanvasGripManager.ActiveHand.Left) ? leftControllerTransform : rightControllerTransform;
     }
 
-    // Lee gatillo frontal de mano específica usando la misma estrategia robusta que Paint.
+// Lee gatillo frontal de mano específica usando la misma estrategia robusta que Paint.
     private bool UpdateResizeTriggerLatch(CanvasGripManager.ActiveHand hand)
     {
+        bool gestureT1Active = false;
+        var gestureController = GameObject.FindAnyObjectByType<GestureUIController>();
+        if (gestureController != null)
+        {
+            gestureT1Active = (hand == CanvasGripManager.ActiveHand.Left) 
+                ? gestureController.IsT1ActiveLeft 
+                : gestureController.IsT1ActiveRight;
+        }
+
         if (!TryGetIndexTriggerValue(hand, out float triggerValue))
         {
             // Si no encontramos el device, asumimos que el trigger está suelto
             // pero mantenemos el latch activo durante un ciclo para evitar oscilación
             // Solo se resetea si el latch ya estaba activo; si no estaba activo, permanece inactivo
+            isResizeTriggerLatched = gestureT1Active;
+
             if (!isResizeTriggerLatched)
             {
                 return false;
@@ -298,12 +312,12 @@ public class CanvasDynamicResizer : MonoBehaviour
 
         if (isResizeTriggerLatched)
         {
-            if (triggerValue <= triggerReleaseThreshold)
+            if (triggerValue <= triggerReleaseThreshold && !gestureT1Active)
             {
                 isResizeTriggerLatched = false;
             }
         }
-        else if (triggerValue >= triggerPressThreshold)
+        else if (triggerValue >= triggerPressThreshold || gestureT1Active)
         {
             isResizeTriggerLatched = true;
         }
