@@ -174,15 +174,10 @@ public class Menu : MonoBehaviour
 
 		menuHerramientasInstance = Instantiate(menuHerramientasPrefab);
 		menuHerramientasInstance.name = "Menu_Herramientas";
-
-		Vector3 forwardOffset = Vector3.zero;
-		if (Camera.main != null)
-		{
-			forwardOffset = Camera.main.transform.forward * 0.3f;
-		}
-		menuHerramientasInstance.transform.position = position + forwardOffset;
-		menuHerramientasInstance.transform.rotation = rotation;
 		menuHerramientasInstance.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
+
+		menuHerramientasInstance.transform.position = position;
+		menuHerramientasInstance.transform.rotation = rotation;
 		menuHerramientasInstance.SetActive(true);
 
 		menuHerramientasInstance.AddComponent<MenuHerramientasButtonHandler>();
@@ -222,7 +217,10 @@ public class Menu : MonoBehaviour
         wasB2LeftActiveLastFrame = b2LeftNow;
         wasB2RightActiveLastFrame = b2RightNow;
 
-        if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+		bool isGeneralActive = menuGeneral != null && menuGeneralInstance.activeSelf;
+		bool isHerramientasActive = menuHerramientasInstance != null && menuHerramientasInstance.activeSelf;
+
+        if (isGeneralActive || isHerramientasActive)
         {
             PositionMenuAboveOpeningController();
         }
@@ -522,7 +520,20 @@ public class Menu : MonoBehaviour
 
 	private bool PositionMenuAboveOpeningController()
 	{
-		if (menuGeneralInstance == null)
+		// 1. Identificamos cuál de los dos menús permitidos debemos mover
+		GameObject menuToMove = null;
+		
+		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+		{
+			menuToMove = menuGeneralInstance;
+		}
+		else if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
+		{
+			menuToMove = menuHerramientasInstance;
+		}
+
+		// Si no hay ninguno de los dos activo (por ejemplo, si estamos en Menu_Entornos), cancelamos
+		if (menuToMove == null)
 		{
 			return false;
 		}
@@ -538,7 +549,8 @@ public class Menu : MonoBehaviour
 			return false;
 		}
 
-		Transform menuTransform = menuGeneralInstance.transform;
+		// 2. Aplicamos la posición y rotación al menú seleccionado
+		Transform menuTransform = menuToMove.transform;
 		Vector3 targetPosition = controllerPosition + Vector3.up * menuHeightAboveController;
 
 		Camera mainCamera = Camera.main;
@@ -551,7 +563,7 @@ public class Menu : MonoBehaviour
 
 		if (mainCamera != null)
 		{
-		Vector3 directionToCamera = targetPosition - mainCamera.transform.position;
+			Vector3 directionToCamera = targetPosition - mainCamera.transform.position;
 
 			directionToCamera.y = 0f;
 
