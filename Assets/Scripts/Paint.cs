@@ -11,6 +11,8 @@ using UnityEngine.InputSystem.Controls;
 /// <summary>
 /// Tracks painting state for one hand independently
 /// </summary>
+public enum ToolType { Pincel, Goma, Graffiti, Acuarela, Mano }
+
 public struct HandPaintState
 {
     public Transform controller;
@@ -19,6 +21,7 @@ public struct HandPaintState
     public int currentPx;       // Current raycast position (for preview cursor)
     public int currentPy;       // Current raycast position (for preview cursor)
     public bool isPainting;
+    public ToolType currentTool;
 }
 
 public class Paint : MonoBehaviour
@@ -135,8 +138,8 @@ public class Paint : MonoBehaviour
         }
 
         // Initialize per-hand painting states
-        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false };
-        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false };
+        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Pincel };
+        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Pincel };
     }
 
     /// <summary>
@@ -234,18 +237,23 @@ public class Paint : MonoBehaviour
         handState.currentPy = py;
 
         // Check if this hand is currently painting
-        bool isPaintingNow = isRightHand ? IsPaintingRight() : IsPaintingLeft();
+        bool isPaintingNow = false;
+        
+        if (handState.currentTool != ToolType.Mano)
+        {
+            isPaintingNow = isRightHand ? IsPaintingRight() : IsPaintingLeft();
+        }
 
         if (isPaintingNow)
         {
             // Draw stroke from last position to current position
             if (handState.lastPx >= 0 && handState.lastPy >= 0 && (px != handState.lastPx || py != handState.lastPy))
             {
-                DrawStroke(runtimeTex, handState.lastPx, handState.lastPy, px, py, brushSize, brushColor);
+                DrawStroke(runtimeTex, handState.lastPx, handState.lastPy, px, py, brushSize, brushColor, handState.currentTool);
             }
             else
             {
-                DrawCircle(runtimeTex, px, py, brushSize, brushColor);
+                DrawCircle(runtimeTex, px, py, brushSize, brushColor, handState.currentTool);
             }
             
             handState.lastPx = px;
@@ -453,13 +461,13 @@ public class Paint : MonoBehaviour
         // Draw preview circle for left hand if it has a valid raycast position
         if (leftHandState.currentPx >= 0 && leftHandState.currentPy >= 0)
         {
-            DrawCircle(previewTex, leftHandState.currentPx, leftHandState.currentPy, brushSize, Color.yellow);
+            DrawPreviewCursor(previewTex, leftHandState.currentPx, leftHandState.currentPy, brushSize, leftHandState.currentTool);
         }
 
         // Draw preview circle for right hand if it has a valid raycast position
         if (rightHandState.currentPx >= 0 && rightHandState.currentPy >= 0)
         {
-            DrawCircle(previewTex, rightHandState.currentPx, rightHandState.currentPy, brushSize, Color.yellow);
+            DrawPreviewCursor(previewTex, rightHandState.currentPx, rightHandState.currentPy, brushSize, rightHandState.currentTool);
         }
 
         previewTex.Apply();
@@ -490,7 +498,7 @@ public class Paint : MonoBehaviour
             previewTex.SetPixels(runtimeTex.GetPixels());
         }
 
-        DrawCircle(previewTex, px, py, brushSize, Color.yellow);
+        DrawPreviewCursor(previewTex, px, py, brushSize, ToolType.Pincel);
         previewTex.Apply();
         SetMaterialTexture(previewTex);
 
@@ -591,7 +599,7 @@ public class Paint : MonoBehaviour
         return dst;
     }
 
-    void DrawCircle(Texture2D tex, int cx, int cy, int radius, Color col)
+    void DrawCircle(Texture2D tex, int cx, int cy, int radius, Color col, ToolType tool)
     {
         int x0 = Mathf.Clamp(cx - radius, 0, tex.width - 1);
         int x1 = Mathf.Clamp(cx + radius, 0, tex.width - 1);
@@ -609,14 +617,44 @@ public class Paint : MonoBehaviour
                 if (dx2 + dy * dy <= r2)
                 {
                     Color src = tex.GetPixel(x, y);
-                    Color outc = Color.Lerp(src, col, col.a);
+                    Color outc = src;
+
+                    switch (tool)
+                    {
+                        case ToolType.Pincel:
+                            outc = Color.Lerp(src, col, col.a);
+                            break;
+                        
+                        case ToolType.Goma:
+                            // Restaura el color original en lugar de hacerlo transparente
+                            outc = sourceTex != null ? sourceTex.GetPixel(x, y) : Color.clear;
+                            break;
+                        
+                        case ToolType.Graffiti:
+                            // Solo pinta el 15% de los píxeles aleatoriamente para efecto spray
+                            if (Random.value < 0.15f)
+                            {
+                                outc = Color.Lerp(src, col, col.a);
+                            }
+                            break;
+                        
+                        case ToolType.Acuarela:
+                            // Calcula qué tan lejos estamos del centro (0 es el centro, 1 es el borde)
+                            float distanceRatio = Mathf.Sqrt(dx2 + dy * dy) / radius;
+                            // Efecto suave: más transparente hacia los bordes
+                            float watercolorAlpha = Mathf.Lerp(0.05f, 0.01f, distanceRatio);
+                            Color watercolorCol = new Color(col.r, col.g, col.b, watercolorAlpha);
+                            outc = Color.Lerp(src, watercolorCol, watercolorCol.a);
+                            break;
+                    }
+
                     tex.SetPixel(x, y, outc);
                 }
             }
         }
     }
 
-    void DrawStroke(Texture2D tex, int fromX, int fromY, int toX, int toY, int radius, Color col)
+    void DrawStroke(Texture2D tex, int fromX, int fromY, int toX, int toY, int radius, Color col, ToolType tool)
     {
         int dx = Mathf.Abs(toX - fromX);
         int dy = Mathf.Abs(toY - fromY);
@@ -629,7 +667,7 @@ public class Paint : MonoBehaviour
 
         while (true)
         {
-            DrawCircle(tex, x, y, radius, col);
+            DrawCircle(tex, x, y, radius, col, tool);
             
             if (x == toX && y == toY) break;
 
@@ -645,5 +683,71 @@ public class Paint : MonoBehaviour
                 y += sy;
             }
         }
+    }
+
+    void DrawPreviewCursor(Texture2D tex, int cx, int cy, int radius, ToolType tool)
+    {
+        int x0 = Mathf.Clamp(cx - radius, 0, tex.width - 1);
+        int x1 = Mathf.Clamp(cx + radius, 0, tex.width - 1);
+        int y0 = Mathf.Clamp(cy - radius, 0, tex.height - 1);
+        int y1 = Mathf.Clamp(cy + radius, 0, tex.height - 1);
+
+        int r2 = radius * radius;
+        for (int x = x0; x <= x1; x++)
+        {
+            int dx = x - cx;
+            for (int y = y0; y <= y1; y++)
+            {
+                int dy = y - cy;
+                float distSq = dx * dx + dy * dy;
+                
+                if (distSq <= r2)
+                {
+                    float dist = Mathf.Sqrt(distSq) / radius; // de 0 a 1
+                    bool drawPixel = false;
+                    Color cursorColor = Color.yellow;
+
+                    switch (tool)
+                    {
+                        case ToolType.Pincel: // Círculo amarillo sólido semi-transparente
+                            cursorColor.a = 0.5f;
+                            drawPixel = true;
+                            break;
+                            
+                        case ToolType.Goma: // Solo dibuja el contorno (un anillo)
+                            if (dist > 0.8f) { cursorColor.a = 0.8f; drawPixel = true; }
+                            break;
+                            
+                        case ToolType.Graffiti: // Puntos dispersos para simular el área del spray
+                            if (Random.value < 0.1f) { cursorColor.a = 0.8f; drawPixel = true; }
+                            break;
+                            
+                        case ToolType.Acuarela: // Círculo muy difuminado
+                            cursorColor.a = Mathf.Lerp(0.3f, 0.0f, dist);
+                            drawPixel = true;
+                            break;
+                            
+                        case ToolType.Mano: // No hay cursor visible
+                            drawPixel = false;
+                            break;
+                    }
+
+                    if (drawPixel)
+                    {
+                        Color src = tex.GetPixel(x, y);
+                        tex.SetPixel(x, y, Color.Lerp(src, cursorColor, cursorColor.a));
+                    }
+                }
+            }
+        }
+    }
+
+    public void SetTool(ToolType newTool)
+    {
+        // En ausencia de saber qué mano abrió el menú, se asume que
+        // queremos cambiar la herramienta para ambas manos por defecto.
+        leftHandState.currentTool = newTool;
+        rightHandState.currentTool = newTool;
+        Debug.Log($"Tool changed to: {newTool}");
     }
 }

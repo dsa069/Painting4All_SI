@@ -34,27 +34,33 @@ public class MenuHerramientasButtonHandler : MonoBehaviour
 
     private void OnRadialButtonClick(int index, string buttonName)
     {
+        Paint paintManager = FindObjectOfType<Paint>();
+        if (paintManager == null)
+        {
+            Debug.LogWarning("No se encontró el script Paint en la escena.");
+        }
+
         switch (index)
         {
             case 0:
                 Debug.Log($"Has pulsado el boton de Pincel");
-
+                if (paintManager != null) paintManager.SetTool(ToolType.Pincel);
                 break;
             case 1:
                 Debug.Log($"Has pulsado el boton de Graffiti");
-
+                if (paintManager != null) paintManager.SetTool(ToolType.Graffiti);
                 break;
             case 2:
                 Debug.Log($"Has pulsado el boton de Acuarela");
-
+                if (paintManager != null) paintManager.SetTool(ToolType.Acuarela);
                 break;
             case 3:
                 Debug.Log($"Has pulsado el boton de Goma");
-
+                if (paintManager != null) paintManager.SetTool(ToolType.Goma);
                 break;
             case 4:
                 Debug.Log($"Has pulsado el boton de Mano");
-
+                if (paintManager != null) paintManager.SetTool(ToolType.Mano);
                 break;
             default:
                 Debug.Log("No encontrado");
