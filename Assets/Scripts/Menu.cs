@@ -176,7 +176,7 @@ public class Menu : MonoBehaviour
             // Acciona la Mano Izquierda. Comprobamos el estado de la Mano Derecha.
             ProcesarAccionContextual(CanvasGripManager.ActiveHand.Left, CanvasGripManager.ActiveHand.Right, OVRInput.Controller.LTouch);
         }
-        else if (rightActionTriggered)
+        if (rightActionTriggered)
         {
             // Acciona la Mano Derecha. Comprobamos el estado de la Mano Izquierda.
             ProcesarAccionContextual(CanvasGripManager.ActiveHand.Right, CanvasGripManager.ActiveHand.Left, OVRInput.Controller.RTouch);
