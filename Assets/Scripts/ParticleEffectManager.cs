@@ -158,10 +158,23 @@ public class ParticleEffectManager : MonoBehaviour
     /// <summary>
     /// Obtiene una partícula disponible del pool
     /// Si no hay disponibles, crea una nueva
+    /// Limpia referencias destruidas del pool antes de buscar
     /// </summary>
     private ParticleSystem GetAvailableParticle()
     {
-        // Buscar una inactiva en el pool
+        // PASO 1: Limpiar del pool cualquier instancia que fue destruida (ej: canvas eliminado con sus children)
+        for (int i = particlePool.Count - 1; i >= 0; i--)
+        {
+            ParticleSystem ps = particlePool[i];
+            // Verificar si la ParticleSystem o su GameObject fue destruida
+            if (ps == null || ps.gameObject == null)
+            {
+                Debug.LogWarning($"[ParticleEffectManager] Removiendo instancia destruida del pool (índice {i}).");
+                particlePool.RemoveAt(i);
+            }
+        }
+
+        // PASO 2: Buscar una inactiva en el pool limpio
         foreach (ParticleSystem ps in particlePool)
         {
             if (!ps.gameObject.activeSelf)
@@ -170,7 +183,7 @@ public class ParticleEffectManager : MonoBehaviour
             }
         }
 
-        // Si no hay disponibles, crear una nueva
+        // PASO 3: Si no hay disponibles, crear una nueva
         if (particleEffectPrefab != null)
         {
             GameObject instance = Instantiate(particleEffectPrefab, transform);
