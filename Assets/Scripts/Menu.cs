@@ -18,12 +18,17 @@ public class Menu : MonoBehaviour
 	[SerializeField]
 	private GameObject menuEntornoPrefab;
 
+	[Header("Herramientas Menu Reference")]
+	[SerializeField]
+	private GameObject menuHerramientasPrefab;
+
 	[SerializeField]
 	private bool hideMenuOnStart = true;
 
 	private static Menu instance;
 	private GameObject menuGeneralInstance;
 	private GameObject menuEntornoInstance;
+	private GameObject menuHerramientasInstance;
 
 	public GameObject ActiveMenuInstance
 	{
@@ -34,6 +39,8 @@ public class Menu : MonoBehaviour
 				return menuGeneralInstance;
 			if (menuEntornoInstance != null && menuEntornoInstance.activeSelf)
 				return menuEntornoInstance;
+			if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
+				return menuHerramientasInstance;
 			return null;
 		}
 	}
@@ -157,6 +164,55 @@ public class Menu : MonoBehaviour
 		}
 	}
 
+	public void OpenHerramientasMenu(Vector3 position, Quaternion rotation)
+	{
+		if (menuGeneralInstance != null)
+		{
+			menuGeneralInstance.SetActive(false);
+		}
+
+		if (menuHerramientasInstance != null)
+		{
+			Destroy(menuHerramientasInstance);
+		}
+
+		if (menuHerramientasPrefab == null)
+		{
+			menuHerramientasPrefab = Resources.Load<GameObject>("Prefabs/Menu_Herramientas");
+		}
+
+		if (menuHerramientasPrefab == null)
+		{
+			Debug.LogWarning("Menu: no se pudo cargar Menu_Herramientas prefab.");
+			return;
+		}
+
+		menuHerramientasInstance = Instantiate(menuHerramientasPrefab);
+		menuHerramientasInstance.name = "Menu_Herramientas";
+		Vector3 menuScale = menuGeneralInstance != null
+			? menuGeneralInstance.transform.localScale
+			: instantiatedMenuScale;
+		menuHerramientasInstance.transform.localScale = menuScale;
+
+		menuHerramientasInstance.transform.position = position;
+		menuHerramientasInstance.transform.rotation = rotation;
+		menuHerramientasInstance.SetActive(true);
+
+		menuHerramientasInstance.AddComponent<MenuHerramientasButtonHandler>();
+
+		Debug.Log("Menu: Menu_Herramientas abierto.");
+	}
+
+	public void CloseHerramientasMenu()
+	{
+		if (menuHerramientasInstance != null)
+		{
+			Destroy(menuHerramientasInstance);
+			menuHerramientasInstance = null;
+			Debug.Log("Menu: Menu_Herramientas cerrado.");
+		}
+	}
+
 	private void Update()
     {
         // 1. Detectar inputs de los controladores de Meta (Botones X y A)
@@ -185,8 +241,10 @@ public class Menu : MonoBehaviour
         wasB2LeftActiveLastFrame = b2LeftNow;
         wasB2RightActiveLastFrame = b2RightNow;
 
-        // Lógica de posicionamiento del menú existente
-        if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+		bool isGeneralActive = menuGeneral != null && menuGeneralInstance.activeSelf;
+		bool isHerramientasActive = menuHerramientasInstance != null && menuHerramientasInstance.activeSelf;
+
+        if (isGeneralActive || isHerramientasActive)
         {
             PositionMenuAboveOpeningController();
         }
@@ -419,6 +477,7 @@ public class Menu : MonoBehaviour
 	{
 
 		CloseEntornoMenu();
+		CloseHerramientasMenu();
 
 		if (menuGeneralInstance != null &&
 			menuGeneralInstance.activeSelf &&
@@ -706,7 +765,20 @@ public class Menu : MonoBehaviour
 
 	private bool PositionMenuAboveOpeningController()
 	{
-		if (menuGeneralInstance == null)
+		// 1. Identificamos cuál de los dos menús permitidos debemos mover
+		GameObject menuToMove = null;
+		
+		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
+		{
+			menuToMove = menuGeneralInstance;
+		}
+		else if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
+		{
+			menuToMove = menuHerramientasInstance;
+		}
+
+		// Si no hay ninguno de los dos activo (por ejemplo, si estamos en Menu_Entornos), cancelamos
+		if (menuToMove == null)
 		{
 			return false;
 		}
@@ -722,7 +794,8 @@ public class Menu : MonoBehaviour
 			return false;
 		}
 
-		Transform menuTransform = menuGeneralInstance.transform;
+		// 2. Aplicamos la posición y rotación al menú seleccionado
+		Transform menuTransform = menuToMove.transform;
 		Vector3 targetPosition = controllerPosition + Vector3.up * menuHeightAboveController;
 
 		Camera mainCamera = Camera.main;
@@ -735,7 +808,7 @@ public class Menu : MonoBehaviour
 
 		if (mainCamera != null)
 		{
-		Vector3 directionToCamera = targetPosition - mainCamera.transform.position;
+			Vector3 directionToCamera = targetPosition - mainCamera.transform.position;
 
 			directionToCamera.y = 0f;
 
