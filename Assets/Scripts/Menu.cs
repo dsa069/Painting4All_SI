@@ -174,7 +174,10 @@ public class Menu : MonoBehaviour
 
 		menuHerramientasInstance = Instantiate(menuHerramientasPrefab);
 		menuHerramientasInstance.name = "Menu_Herramientas";
-		menuHerramientasInstance.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
+		Vector3 menuScale = menuGeneralInstance != null
+			? menuGeneralInstance.transform.localScale
+			: instantiatedMenuScale;
+		menuHerramientasInstance.transform.localScale = menuScale;
 
 		menuHerramientasInstance.transform.position = position;
 		menuHerramientasInstance.transform.rotation = rotation;
