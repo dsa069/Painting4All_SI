@@ -234,6 +234,7 @@ public class Menu : MonoBehaviour
 	{
 
 		CloseEntornoMenu();
+		CloseHerramientasMenu();
 
 		if (menuGeneralInstance != null &&
 			menuGeneralInstance.activeSelf &&

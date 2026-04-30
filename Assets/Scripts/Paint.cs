@@ -138,8 +138,8 @@ public class Paint : MonoBehaviour
         }
 
         // Initialize per-hand painting states
-        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Pincel };
-        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Pincel };
+        leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Mano };
+        rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = ToolType.Mano };
     }
 
     /// <summary>
