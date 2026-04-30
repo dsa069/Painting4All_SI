@@ -45,6 +45,13 @@ public class MenuEntornoButtonHandler : MonoBehaviour
             Debug.LogWarning("MenuEntornoButtonHandler: No se encontró el script DayAndNight en la escena.");
         }
 
+        bool shouldEnableMR = (index == 5);
+        PassthroughToggler toggler = FindObjectOfType<PassthroughToggler>();
+        if (toggler != null)
+        {
+            toggler.ToggleMR(shouldEnableMR);
+        }
+
         Transform playerTransform = null;
         OVRCameraRig cameraRig = FindObjectOfType<OVRCameraRig>();
         if (cameraRig != null)
@@ -70,12 +77,12 @@ public class MenuEntornoButtonHandler : MonoBehaviour
                 break;
             case 2: // Bosque
                 Debug.Log("Has pulsado el boton de entorno Bosque");
-                TeleportPlayer(playerTransform, new Vector3(50, 7, 50));
+                TeleportPlayer(playerTransform, new Vector3(50, 3, 50));
                 if (dayAndNight != null) dayAndNight.SetForestDay();
                 break;
             case 3: // Playa
                 Debug.Log("Has pulsado el boton de entorno Playa");
-                TeleportPlayer(playerTransform, new Vector3(2000, 7, 25));
+                TeleportPlayer(playerTransform, new Vector3(2000, 3, 25));
                 if (dayAndNight != null) dayAndNight.SetBeachSunset();
                 break;
             case 4: // Carcel / Prision
@@ -85,15 +92,7 @@ public class MenuEntornoButtonHandler : MonoBehaviour
                 break;
             case 5: // MR
                 Debug.Log("Has pulsado el boton de entorno MR");
-                PassthroughToggler toggler = FindObjectOfType<PassthroughToggler>();
-                if (toggler != null)
-                {
-                    toggler.ToggleMR(!toggler.IsMRActive);
-                }
-                else
-                {
-                    Debug.LogError("No se encontró PassthroughToggler en la escena.");
-                }
+                TeleportPlayer(playerTransform, new Vector3(10000, 0, 0));
                 break;
             default:
                 Debug.Log("Boton de entorno no mapeado: " + index);
