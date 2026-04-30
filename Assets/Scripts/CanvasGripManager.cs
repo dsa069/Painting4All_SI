@@ -173,6 +173,22 @@ public class CanvasGripManager : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// Obtiene la mano opuesta
+    /// </summary>
+    public ActiveHand GetOppositeHand(ActiveHand hand)
+    {
+        return hand == ActiveHand.Left ? ActiveHand.Right : ActiveHand.Left;
+    }
+
+    /// <summary>
+    /// Bloquea la pintura si esta mano o la mano opuesta está sujetando un lienzo
+    /// </summary>
+    public bool IsPaintBlockedByGrip(ActiveHand paintHand)
+    {
+        return IsHandAlreadyGripping(paintHand) || IsHandAlreadyGripping(GetOppositeHand(paintHand));
+    }
+
     #if UNITY_EDITOR
     
     /// <summary>

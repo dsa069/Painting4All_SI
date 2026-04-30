@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 7231068233820141886}
   - component: {fileID: 1267105617364478057}
   - component: {fileID: 6650264935328043527}
+  - component: {fileID: 6684559589481162739}
   - component: {fileID: 3585294285949927493}
   - component: {fileID: 3173768937211050578}
   m_Layer: 0
@@ -113,6 +114,31 @@ MonoBehaviour:
   previewEnabled: 1
   edgeMargin: 0.002
   pixelEdgeMargin: 2
+--- !u!114 &6684559589481162739
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1064559266705447370}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83b2066cc0c41bf4a9a83f19174db244, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CanvasDynamicResizer
+  resizeSensitivity: 0.3
+  minScale: {x: 0.1, y: 0.1, z: 0.1}
+  maxScale: {x: 3, y: 3, z: 3}
+  handleLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  leftControllerTransform: {fileID: 0}
+  rightControllerTransform: {fileID: 0}
+  triggerPressThreshold: 0.1
+  triggerReleaseThreshold: 0.05
+  useCanvasSurfaceFallback: 1
+  edgeZonePercent: 0.15
+  resizeMovementDeadZone: 0.0025
 --- !u!114 &3585294285949927493
 MonoBehaviour:
   m_ObjectHideFlags: 0
