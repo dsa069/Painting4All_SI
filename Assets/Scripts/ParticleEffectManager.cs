@@ -128,9 +128,11 @@ public class ParticleEffectManager : MonoBehaviour
 
         // Configurar posición y padre
         Transform psTransform = ps.transform;
-        psTransform.SetParent(parent);
+        psTransform.SetParent(parent, true); // mantener posición mundial
         psTransform.position = position;
         psTransform.localRotation = Quaternion.identity;
+        // Evitar heredar escalado no deseado del padre
+        psTransform.localScale = Vector3.one;
 
         // Activar el efecto
         ps.gameObject.SetActive(true);
