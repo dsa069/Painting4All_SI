@@ -53,6 +53,8 @@ public class Paint : MonoBehaviour
     Texture2D previewTex;
     Texture2D sourceTex;
 
+    public Texture2D ExportTexture => runtimeTex;
+
     // Per-hand painting state for simultaneous dual-hand painting
     HandPaintState leftHandState;
     HandPaintState rightHandState;

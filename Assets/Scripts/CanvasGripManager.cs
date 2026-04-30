@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 /// <summary>
 /// Gestiona qué lienzo está siendo agarrado por cada mano.
@@ -9,15 +10,24 @@ using System.Collections.Generic;
 /// - Registra qué lienzo está siendo agarrado por la mano izquierda o derecha
 /// - Valida que una mano no pueda agarrar dos lienzos simultáneamente
 /// - Permite desregistrar agarres cuando se suelta
+/// - Notifica a suscriptores cuando inicia/termina un grip (para feedback visual, partículas, etc.)
 /// 
 /// Uso desde Seleccionar_Lienzo:
 /// - Al presionar grip/T2: llamar a IsHandAlreadyGripping(hand) para validar
 /// - Si devuelve false: procedemos a enganchar y llamamos a RegisterGrip(hand, this)
 /// - Al soltar: llamamos a UnregisterGrip(hand)
+/// 
+/// Eventos disponibles:
+/// - OnGripStarted(hand, canvas) - Se dispara cuando un lienzo es agarrado
+/// - OnGripEnded(hand, canvas) - Se dispara cuando un lienzo es soltado
 /// </summary>
 public class CanvasGripManager : MonoBehaviour
 {
     public enum ActiveHand { Left, Right }
+    
+    // Eventos para notificar cambios de grip
+    public static Action<ActiveHand, Seleccionar_Lienzo> OnGripStarted;
+    public static Action<ActiveHand, Seleccionar_Lienzo> OnGripEnded;
     
     private static CanvasGripManager instance;
     private Dictionary<ActiveHand, Seleccionar_Lienzo> grippedCanvases;  // Mapeo: Mano → Lienzo
@@ -118,6 +128,10 @@ public class CanvasGripManager : MonoBehaviour
         grippedCanvases[hand] = canvas;
         canvasesByGrip[canvas] = hand;
         Debug.Log($"[CanvasGripManager] ✓ Lienzo '{canvas.gameObject.name}' registrado para mano {hand}");
+        
+        // Disparar evento de grip iniciado
+        OnGripStarted?.Invoke(hand, canvas);
+        
         return true;
     }
 
@@ -138,6 +152,12 @@ public class CanvasGripManager : MonoBehaviour
             }
             
             Debug.Log($"[CanvasGripManager] ✓ Lienzo desregistrado para mano {hand}: {(canvas != null ? canvas.gameObject.name : "null")}");
+            
+            // Disparar evento de grip terminado
+            if (canvas != null)
+            {
+                OnGripEnded?.Invoke(hand, canvas);
+            }
         }
     }
 

@@ -19,7 +19,7 @@ public class Generar_Lienzo : MonoBehaviour
 
     [Header("Spawn Settings")]
     [SerializeField]
-    private float spawnDistance = 1.25f;
+    private float spawnDistance = 3f;
     [SerializeField]
     private float forwardOffset = 0.1f;
 
@@ -238,6 +238,7 @@ public class Generar_Lienzo : MonoBehaviour
 
         newCanvas.transform.position = spawnPosition;
         newCanvas.transform.LookAt(cameraPosition);
+        newCanvas.transform.Rotate(0f, 180f, 0f);
         newCanvas.name = $"Lienzo_{System.DateTime.Now:HH-mm-ss}";
     }
 }

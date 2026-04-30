@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using System;
+using System.IO;
+using System.Collections;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem.UI;
 #endif
@@ -66,6 +69,18 @@ public class Menu : MonoBehaviour
 	private GraphicRaycaster menuGraphicRaycaster;
 	private EventSystem eventSystem;
 	private bool wasTriggerPressed = false;
+
+	[Header("Feedback Exportacion")]
+	[SerializeField]
+	private float exportFeedbackDuration = 1.8f;
+
+	[SerializeField]
+	private Vector3 exportFeedbackLocalOffset = new Vector3(0f, -0.1f, 1.2f);
+
+	private Canvas exportFeedbackCanvas;
+	private Text exportFeedbackText;
+	private Coroutine exportFeedbackCoroutine;
+	private Coroutine hapticCoroutine;
 
 	private void Start()
     {
@@ -200,21 +215,27 @@ public class Menu : MonoBehaviour
 
 	private void Update()
     {
-        bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // X
-        bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // A
+        // 1. Detectar inputs de los controladores de Meta (Botones X y A)
+        bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // Mano Izquierda (X)
+        bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // Mano Derecha (A)
 
+        // 2. Detectar gestos B2 (Queda preparado en el código, aunque nos centremos en mandos por ahora)
         bool b2LeftNow = (gestureController != null) && gestureController.IsB2ActiveLeft;
         bool b2RightNow = (gestureController != null) && gestureController.IsB2ActiveRight;
 
-        if (xPressed || (b2LeftNow && !wasB2LeftActiveLastFrame))
+        // Validar si se disparó la acción en este frame (Mano Izquierda o Derecha)
+        bool leftActionTriggered = xPressed || (b2LeftNow && !wasB2LeftActiveLastFrame);
+        bool rightActionTriggered = aPressed || (b2RightNow && !wasB2RightActiveLastFrame);
+
+        if (leftActionTriggered)
         {
-			Debug.Log("Menu: input detectado -> X=true, A=false");
-            HandleMenuButtonPressed(OVRInput.Controller.LTouch);
+            // Acciona la Mano Izquierda. Comprobamos el estado de la Mano Derecha.
+            ProcesarAccionContextual(CanvasGripManager.ActiveHand.Left, CanvasGripManager.ActiveHand.Right, OVRInput.Controller.LTouch);
         }
-        else if (aPressed || (b2RightNow && !wasB2RightActiveLastFrame))
+        if (rightActionTriggered)
         {
-			Debug.Log("Menu: input detectado -> X=false, A=true");
-            HandleMenuButtonPressed(OVRInput.Controller.RTouch);
+            // Acciona la Mano Derecha. Comprobamos el estado de la Mano Izquierda.
+            ProcesarAccionContextual(CanvasGripManager.ActiveHand.Right, CanvasGripManager.ActiveHand.Left, OVRInput.Controller.RTouch);
         }
 
         wasB2LeftActiveLastFrame = b2LeftNow;
@@ -230,6 +251,227 @@ public class Menu : MonoBehaviour
 
         HandleMenuTriggerInteraction();
     }
+
+    /// <summary>
+    /// Lógica central de interacción cruzada: Evalúa si la mano opuesta sostiene un lienzo.
+    /// Si es así, exporta. Si no, abre el menú (solo si la mano que presiona no está sosteniendo).
+    /// Permite exportación simultánea de ambos lienzos cuando ambas manos presionan.
+    /// </summary>
+    private void ProcesarAccionContextual(CanvasGripManager.ActiveHand manoAccion, CanvasGripManager.ActiveHand manoOpuesta, OVRInput.Controller mandoInteraccion)
+    {
+        // REGLA DE PRIORIDAD: Comprobamos si la MANO OPUESTA está sujetando un lienzo
+        if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoOpuesta))
+        {
+            // HAY un lienzo seleccionado por la otra mano: EXPORTAMOS (incluso si esta mano también está sosteniendo).
+            Seleccionar_Lienzo lienzoSujeto = CanvasGripManager.Instance.GetGrippedCanvas(manoOpuesta);
+            if (lienzoSujeto != null)
+            {
+                ExportarLienzo(lienzoSujeto.gameObject);
+                return;
+            }
+        }
+
+        // LA MANO OPUESTA NO está sosteniendo nada.
+        // Comprobamos si la MANO QUE PRESIONA está sosteniendo (para evitar conflictos físicos).
+        if (CanvasGripManager.Instance != null && CanvasGripManager.Instance.IsHandAlreadyGripping(manoAccion))
+        {
+            Debug.Log($"[Menu] La mano {manoAccion} está sujetando un objeto y la mano opuesta no tiene lienzo. Se ignora para evitar conflictos físicos.");
+            return;
+        }
+
+        // Comportamiento por defecto: Abrir menú.
+        AbrirMenu(mandoInteraccion);
+    }
+
+    /// <summary>
+    /// Función placeholder solicitada para abrir el menú general.
+    /// Envuelve la lógica existente de HandleMenuButtonPressed.
+    /// </summary>
+    private void AbrirMenu(OVRInput.Controller pressedController)
+    {
+        Debug.Log($"[Menu] No hay lienzos sujetos. Abriendo menú con {pressedController}");
+        HandleMenuButtonPressed(pressedController);
+    }
+
+    /// <summary>
+    /// Función placeholder solicitada para exportar el lienzo.
+    /// </summary>
+    private void ExportarLienzo(GameObject lienzo)
+    {
+		if (lienzo == null)
+		{
+			Debug.LogWarning("[Menu/Exportación] No se pudo exportar: el lienzo es null.");
+			MostrarFeedbackExportacion("No se pudo exportar el lienzo.", false);
+			return;
+		}
+
+		Paint paint = lienzo.GetComponent<Paint>();
+		if (paint == null)
+		{
+			Debug.LogWarning($"[Menu/Exportación] No se encontró el componente Paint en '{lienzo.name}'.");
+			MostrarFeedbackExportacion("El lienzo no tiene componente Paint.", false);
+			return;
+		}
+
+		Texture2D exportTexture = paint.ExportTexture;
+		if (exportTexture == null)
+		{
+			Debug.LogWarning($"[Menu/Exportación] El lienzo '{lienzo.name}' no tiene una textura exportable.");
+			MostrarFeedbackExportacion("El lienzo no tiene textura exportable.", false);
+			return;
+		}
+
+		try
+		{
+			byte[] pngData = exportTexture.EncodeToPNG();
+			if (pngData == null || pngData.Length == 0)
+			{
+				Debug.LogWarning($"[Menu/Exportación] No se pudo generar el PNG para '{lienzo.name}'.");
+				MostrarFeedbackExportacion("Error al generar el PNG.", false);
+				return;
+			}
+
+			string exportFolder = Path.Combine(Application.persistentDataPath, "Exports");
+			Directory.CreateDirectory(exportFolder);
+
+			string safeCanvasName = string.IsNullOrWhiteSpace(lienzo.name) ? "Lienzo" : lienzo.name.Trim();
+			string fileName = $"{safeCanvasName}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+			string filePath = Path.Combine(exportFolder, fileName);
+
+			File.WriteAllBytes(filePath, pngData);
+			Debug.Log($"[Menu/Exportación] Lienzo exportado correctamente: {filePath}");
+			MostrarFeedbackExportacion("Lienzo exportado correctamente", true);
+		}
+		catch (Exception exception)
+		{
+			Debug.LogError($"[Menu/Exportación] Error exportando '{lienzo.name}': {exception.Message}");
+			MostrarFeedbackExportacion("Error al exportar el lienzo", false);
+		}
+    }
+
+	private void MostrarFeedbackExportacion(string mensaje, bool exito)
+	{
+		if (!EnsureExportFeedbackUI())
+		{
+			return;
+		}
+
+		exportFeedbackText.text = mensaje;
+		exportFeedbackText.color = exito
+			? new Color(0.62f, 1f, 0.62f, 1f)
+			: new Color(1f, 0.62f, 0.62f, 1f);
+		exportFeedbackCanvas.gameObject.SetActive(true);
+
+		if (exportFeedbackCoroutine != null)
+		{
+			StopCoroutine(exportFeedbackCoroutine);
+		}
+		exportFeedbackCoroutine = StartCoroutine(HideExportFeedbackAfterDelay());
+
+		if (hapticCoroutine != null)
+		{
+			StopCoroutine(hapticCoroutine);
+		}
+		hapticCoroutine = StartCoroutine(PlayShortHapticPulse(exito));
+	}
+
+	private bool EnsureExportFeedbackUI()
+	{
+		if (exportFeedbackCanvas != null && exportFeedbackText != null)
+		{
+			ReanchorExportFeedback();
+			return true;
+		}
+
+		Camera mainCamera = Camera.main;
+		if (mainCamera == null)
+		{
+			Debug.LogWarning("Menu: no se pudo mostrar feedback de exportación porque Camera.main no está disponible.");
+			return false;
+		}
+
+		GameObject canvasGO = new GameObject("ExportFeedbackCanvas");
+		exportFeedbackCanvas = canvasGO.AddComponent<Canvas>();
+		exportFeedbackCanvas.renderMode = RenderMode.WorldSpace;
+		exportFeedbackCanvas.sortingOrder = 200;
+
+		RectTransform canvasRect = exportFeedbackCanvas.GetComponent<RectTransform>();
+		canvasRect.sizeDelta = new Vector2(420f, 110f);
+
+		GameObject bgGO = new GameObject("Background");
+		bgGO.transform.SetParent(canvasGO.transform, false);
+		Image bgImage = bgGO.AddComponent<Image>();
+		bgImage.color = new Color(0f, 0f, 0f, 0.6f);
+
+		RectTransform bgRect = bgGO.GetComponent<RectTransform>();
+		bgRect.anchorMin = Vector2.zero;
+		bgRect.anchorMax = Vector2.one;
+		bgRect.offsetMin = Vector2.zero;
+		bgRect.offsetMax = Vector2.zero;
+
+		GameObject textGO = new GameObject("Text");
+		textGO.transform.SetParent(bgGO.transform, false);
+		exportFeedbackText = textGO.AddComponent<Text>();
+		exportFeedbackText.alignment = TextAnchor.MiddleCenter;
+		exportFeedbackText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		exportFeedbackText.fontSize = 34;
+		exportFeedbackText.resizeTextForBestFit = true;
+		exportFeedbackText.resizeTextMinSize = 20;
+		exportFeedbackText.resizeTextMaxSize = 40;
+
+		RectTransform textRect = textGO.GetComponent<RectTransform>();
+		textRect.anchorMin = new Vector2(0.05f, 0.1f);
+		textRect.anchorMax = new Vector2(0.95f, 0.9f);
+		textRect.offsetMin = Vector2.zero;
+		textRect.offsetMax = Vector2.zero;
+
+		ReanchorExportFeedback();
+		exportFeedbackCanvas.gameObject.SetActive(false);
+		return true;
+	}
+
+	private void ReanchorExportFeedback()
+	{
+		if (exportFeedbackCanvas == null)
+		{
+			return;
+		}
+
+		Camera mainCamera = Camera.main;
+		if (mainCamera == null)
+		{
+			return;
+		}
+
+		Transform canvasTransform = exportFeedbackCanvas.transform;
+		canvasTransform.SetParent(mainCamera.transform, false);
+		canvasTransform.localPosition = exportFeedbackLocalOffset;
+		canvasTransform.localRotation = Quaternion.identity;
+		canvasTransform.localScale = Vector3.one * 0.0014f;
+	}
+
+	private IEnumerator HideExportFeedbackAfterDelay()
+	{
+		yield return new WaitForSeconds(exportFeedbackDuration);
+		if (exportFeedbackCanvas != null)
+		{
+			exportFeedbackCanvas.gameObject.SetActive(false);
+		}
+	}
+
+	private IEnumerator PlayShortHapticPulse(bool exito)
+	{
+		float amplitude = exito ? 0.22f : 0.12f;
+		float frequency = exito ? 0.9f : 0.5f;
+		float duration = exito ? 0.09f : 0.12f;
+
+		OVRInput.SetControllerVibration(frequency, amplitude, OVRInput.Controller.LTouch);
+		OVRInput.SetControllerVibration(frequency, amplitude, OVRInput.Controller.RTouch);
+		yield return new WaitForSeconds(duration);
+
+		OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
+		OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
+	}
 
 	private void HandleMenuButtonPressed(OVRInput.Controller pressedController)
 	{
