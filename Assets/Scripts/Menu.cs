@@ -254,6 +254,7 @@ public class Menu : MonoBehaviour
 		menuColorGrosorInstance.transform.position = position;
 		menuColorGrosorInstance.transform.rotation = rotation;
 		menuColorGrosorInstance.SetActive(true);
+		menuColorGrosorInstance.AddComponent<MenuColorGrosorButtonHandler>();
 
 		Debug.Log("Menu: Menu_Color_Grosor abierto.");
 	}
@@ -831,6 +832,10 @@ public class Menu : MonoBehaviour
 		else if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
 		{
 			menuToMove = menuHerramientasInstance;
+		}
+		else if (menuColorGrosorInstance != null && menuColorGrosorInstance.activeSelf)
+		{
+			menuToMove = menuColorGrosorInstance;
 		}
 
 		// Si no hay ninguno de los dos activo (por ejemplo, si estamos en Menu_Entornos), cancelamos
