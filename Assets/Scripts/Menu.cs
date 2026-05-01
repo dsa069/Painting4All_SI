@@ -535,6 +535,7 @@ public class Menu : MonoBehaviour
 
 		CloseEntornoMenu();
 		CloseHerramientasMenu();
+		CloseColorGrosorMenu();
 
 		if (menuGeneralInstance != null &&
 			menuGeneralInstance.activeSelf &&
@@ -831,10 +832,6 @@ public class Menu : MonoBehaviour
 		else if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
 		{
 			menuToMove = menuHerramientasInstance;
-		}
-		else if (menuColorGrosorInstance != null && menuColorGrosorInstance.activeSelf)
-		{
-			menuToMove = menuColorGrosorInstance;
 		}
 
 		if (menuToMove == null)
