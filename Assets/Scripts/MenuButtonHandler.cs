@@ -15,6 +15,11 @@ public class MenuButtonHandler : MonoBehaviour
 			Debug.Log("MenuButtonHandler: Saltando inicializacion para Menu_Herramientas (usa MenuHerramientasButtonHandler)");
 			return;
 		}
+		if (gameObject.name == "Menu_Color_Grosor")
+		{
+			Debug.Log("MenuButtonHandler: Saltando inicializacion para Menu_Color_Grosor");
+			return;
+		}
 
 		Button[] buttons = GetComponentsInChildren<Button>(true);
 		for (int i = 0; i < buttons.Length; i++)
@@ -41,7 +46,10 @@ public class MenuButtonHandler : MonoBehaviour
 				break;
 			case 1:
 				Debug.Log("Has pulsado el boton de Paleta");
-				// TODO: Implementar logica aqui
+				if (Menu.Instance != null)
+				{
+					Menu.Instance.OpenColorGrosorMenu(Menu.Instance.MenuGeneralPosition, Menu.Instance.MenuGeneralRotation);
+				}
 
 				break;
 			case 2:

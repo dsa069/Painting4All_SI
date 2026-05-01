@@ -5951,6 +5951,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 2467675852761375161, guid: a8d8b0eeed3a203459f7b83d4e5302a5, type: 3}
   m_PrefabInstance: {fileID: 368262870}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &372409456 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4284494373444046731, guid: 5beac7ba2e7e54f42aaadb63efd416a4, type: 3}
+  m_PrefabInstance: {fileID: 6547041222969081864}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &377493932
 GameObject:
   m_ObjectHideFlags: 0
@@ -8498,6 +8503,11 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 527076366}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &528118499 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7736047195056135820, guid: ac785ecb744574b4abfdd917fed60d9c, type: 3}
+  m_PrefabInstance: {fileID: 1209088391}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &533251979
 GameObject:
   m_ObjectHideFlags: 0
@@ -15758,7 +15768,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Menu
   menuGeneral: {fileID: 1312931024859906855}
   menuEntornoPrefab: {fileID: 1030827766}
-  menuHerramientasPrefab: {fileID: 0}
+  menuHerramientasPrefab: {fileID: 372409456}
+  menuColorGrosorPrefab: {fileID: 528118499}
   hideMenuOnStart: 1
   menuDistance: 1.6
   menuVerticalOffset: -0.05
