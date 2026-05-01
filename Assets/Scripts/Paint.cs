@@ -42,6 +42,8 @@ public struct HandPaintState
 public class Paint : MonoBehaviour
 {
     public static ToolType globalCurrentTool = ToolType.Mano;
+    public static PaintColorType globalColor = PaintColorType.Black;
+    public static BrushThickness globalThickness = BrushThickness.Medio;
 
     [Header("Pointer")]
     public Transform rayOrigin;
@@ -76,9 +78,8 @@ public class Paint : MonoBehaviour
 
     void Start()
     {
-        // Inicializar con color por defecto (puedes cambiarlo aquí)
-        SetColor(PaintColorType.Black);
-        SetThickness(BrushThickness.Medio);
+        SetColor(globalColor);
+        SetThickness(globalThickness);
 
         spriteRenderer = GetComponent<SpriteRenderer>();
         uiImage = GetComponent<Image>(); 

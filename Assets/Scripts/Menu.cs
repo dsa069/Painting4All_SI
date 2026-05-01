@@ -301,7 +301,7 @@ public class Menu : MonoBehaviour
 		bool isHerramientasActive = menuHerramientasInstance != null && menuHerramientasInstance.activeSelf;
 		bool isColorGrosorActive = menuColorGrosorInstance != null && menuColorGrosorInstance.activeSelf;
 
-        if (isGeneralActive || isHerramientasActive || isColorGrosorActive)
+        if (isGeneralActive || isHerramientasActive)
         {
             PositionMenuAboveOpeningController();
         }
