@@ -68,5 +68,10 @@ public class MenuColorGrosorButtonHandler : MonoBehaviour
         {
             Debug.LogWarning($"Índice fuera de rango: {index}");
         }
+
+        if (Menu.Instance != null)
+        {
+            Menu.Instance.CloseColorGrosorMenu();
+        }
     }
 }
