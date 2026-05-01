@@ -39,6 +39,7 @@ public class MenuColorGrosorButtonHandler : MonoBehaviour
         if (index >= 0 && index <= 15)
         {
             PaintColorType selectedColor = (PaintColorType)index;
+            Paint.globalColor = selectedColor;
             
             foreach (var p in allPaints)
             {
@@ -57,6 +58,8 @@ public class MenuColorGrosorButtonHandler : MonoBehaviour
                 case 18: selectedThickness = BrushThickness.Grueso; break;
                 case 19: selectedThickness = BrushThickness.ExtraGrueso; break;
             }
+
+            Paint.globalThickness = selectedThickness;
 
             foreach (var p in allPaints)
             {
