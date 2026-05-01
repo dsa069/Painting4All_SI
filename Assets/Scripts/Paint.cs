@@ -13,6 +13,21 @@ using UnityEngine.InputSystem.Controls;
 /// </summary>
 public enum ToolType { Pincel, Goma, Graffiti, Acuarela, Mano }
 
+// Nuevos Enums para colores y grosores
+public enum PaintColorType
+{
+    White, LightGray, Gray, Black, Brown, Red, Orange, Yellow,
+    Lime, Green, Cyan, LightBlue, Blue, Purple, Magenta, Pink
+}
+
+public enum BrushThickness
+{
+    Fino = 8,
+    Medio = 16,
+    Grueso = 24,
+    ExtraGrueso = 36
+}
+
 public struct HandPaintState
 {
     public Transform controller;
@@ -38,7 +53,7 @@ public class Paint : MonoBehaviour
 
     [Header("Brush")]
     public int brushSize = 16;
-    public Color brushColor = Color.red;
+    public Color brushColor = Color.white;
     public bool previewEnabled = true;
     
     [Header("Canvas Boundaries")]
@@ -61,6 +76,10 @@ public class Paint : MonoBehaviour
 
     void Start()
     {
+        // Inicializar con color por defecto (puedes cambiarlo aquí)
+        SetColor(PaintColorType.Black);
+        SetThickness(BrushThickness.Medio);
+
         spriteRenderer = GetComponent<SpriteRenderer>();
         uiImage = GetComponent<Image>(); 
         rend = GetComponent<Renderer>();
@@ -103,6 +122,40 @@ public class Paint : MonoBehaviour
         AutoDetectControllers();
     }
 
+    // --- NUEVOS MÉTODOS DE COLOR Y GROSOR ---
+
+    public void SetColor(PaintColorType colorType)
+    {
+        Color newColor = Color.white;
+        switch (colorType)
+        {
+            case PaintColorType.White: ColorUtility.TryParseHtmlString("#F9FFFE", out newColor); break;
+            case PaintColorType.LightGray: ColorUtility.TryParseHtmlString("#9D9D97", out newColor); break;
+            case PaintColorType.Gray: ColorUtility.TryParseHtmlString("#474F52", out newColor); break;
+            case PaintColorType.Black: ColorUtility.TryParseHtmlString("#1D1D21", out newColor); break;
+            case PaintColorType.Brown: ColorUtility.TryParseHtmlString("#835432", out newColor); break;
+            case PaintColorType.Red: ColorUtility.TryParseHtmlString("#B02E26", out newColor); break;
+            case PaintColorType.Orange: ColorUtility.TryParseHtmlString("#F9801D", out newColor); break;
+            case PaintColorType.Yellow: ColorUtility.TryParseHtmlString("#FED83D", out newColor); break;
+            case PaintColorType.Lime: ColorUtility.TryParseHtmlString("#80C71F", out newColor); break;
+            case PaintColorType.Green: ColorUtility.TryParseHtmlString("#5E7C16", out newColor); break;
+            case PaintColorType.Cyan: ColorUtility.TryParseHtmlString("#169C9C", out newColor); break;
+            case PaintColorType.LightBlue: ColorUtility.TryParseHtmlString("#3AB3DA", out newColor); break;
+            case PaintColorType.Blue: ColorUtility.TryParseHtmlString("#3C44AA", out newColor); break;
+            case PaintColorType.Purple: ColorUtility.TryParseHtmlString("#8932B8", out newColor); break;
+            case PaintColorType.Magenta: ColorUtility.TryParseHtmlString("#C74EBD", out newColor); break;
+            case PaintColorType.Pink: ColorUtility.TryParseHtmlString("#F38BAA", out newColor); break;
+        }
+        brushColor = newColor;
+    }
+
+    public void SetThickness(BrushThickness thickness)
+    {
+        brushSize = (int)thickness;
+    }
+
+    // ----------------------------------------
+
     void CreatePreviewTexture()
     {
         previewTex = new Texture2D(runtimeTex.width, runtimeTex.height, TextureFormat.RGBA32, false);
@@ -131,7 +184,6 @@ public class Paint : MonoBehaviour
         }
         #endif
 
-        // Auto-detectar GestureUIController si no está asignado
         if (gestureController == null)
         {
             gestureController = FindObjectOfType<GestureUIController>();
@@ -141,16 +193,10 @@ public class Paint : MonoBehaviour
             }
         }
 
-        // Initialize per-hand painting states
         leftHandState = new HandPaintState { controller = leftControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = globalCurrentTool };
         rightHandState = new HandPaintState { controller = rightControllerTransform, lastPx = -1, lastPy = -1, currentPx = -1, currentPy = -1, isPainting = false, currentTool = globalCurrentTool };
     }
 
-    /// <summary>
-    /// Determines if an XR controller device corresponds to the left hand (true) or right hand (false)
-    /// Uses device enumeration order: first XR controller = left, second+ = right
-    /// This approach is more reliable than name-based matching for generic device names
-    /// </summary>
     bool IsLeftHandDevice(UnityEngine.InputSystem.XR.XRController device)
     {
         int xrControllerIndex = -1;
@@ -166,7 +212,6 @@ public class Paint : MonoBehaviour
             }
         }
 
-        // First XR device (index 0) = left hand, rest = right hand
         return xrControllerIndex == 0;
     }
 
@@ -174,14 +219,11 @@ public class Paint : MonoBehaviour
     {
         if (runtimeTex == null) return;
 
-        // Process both hands independently
         ProcessHandPainting(ref leftHandState, false);
         ProcessHandPainting(ref rightHandState, true);
 
-        // Apply texture once after both hands finish
         runtimeTex.Apply();
 
-        // Update preview for both hands
         if (previewEnabled)
         {
             UpdatePreviewBothHands();
@@ -192,10 +234,6 @@ public class Paint : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Processes painting for one hand independently
-    /// Always performs raycast for preview cursor, draws strokes only when painting
-    /// </summary>
     void ProcessHandPainting(ref HandPaintState handState, bool isRightHand)
     {
         if (handState.controller == null)
@@ -210,7 +248,6 @@ public class Paint : MonoBehaviour
 
         Ray ray = new Ray(handState.controller.position, handState.controller.forward);
 
-        // Always update current position from raycast (for preview cursor)
         if (!GetRayHit(ray, out Vector2 uv))
         {
             handState.currentPx = -1;
@@ -224,7 +261,6 @@ public class Paint : MonoBehaviour
         int px = Mathf.FloorToInt(uv.x * runtimeTex.width);
         int py = Mathf.FloorToInt(uv.y * runtimeTex.height);
 
-        // Validate that pixel is not in edge margin - reject if too close to edges
         if (px < pixelEdgeMargin || px >= runtimeTex.width - pixelEdgeMargin ||
             py < pixelEdgeMargin || py >= runtimeTex.height - pixelEdgeMargin)
         {
@@ -236,11 +272,9 @@ public class Paint : MonoBehaviour
             return;
         }
 
-        // Update current position for preview (always)
         handState.currentPx = px;
         handState.currentPy = py;
 
-        // Check if this hand is currently painting
         bool isPaintingNow = false;
         
         if (handState.currentTool != ToolType.Mano)
@@ -250,7 +284,6 @@ public class Paint : MonoBehaviour
 
         if (isPaintingNow)
         {
-            // Draw stroke from last position to current position
             if (handState.lastPx >= 0 && handState.lastPy >= 0 && (px != handState.lastPx || py != handState.lastPy))
             {
                 DrawStroke(runtimeTex, handState.lastPx, handState.lastPy, px, py, brushSize, brushColor, handState.currentTool);
@@ -266,7 +299,6 @@ public class Paint : MonoBehaviour
         }
         else
         {
-            // Reset last position when not painting (but keep current for preview)
             handState.lastPx = -1;
             handState.lastPy = -1;
             handState.isPainting = false;
@@ -291,7 +323,6 @@ public class Paint : MonoBehaviour
                     Vector3 worldPoint = ray.GetPoint(t);
                     Vector2 uvCandidate = ComputeUVForSprite(worldPoint);
                     
-                    // Check if UV is within valid bounds and outside edge margin
                     float minBound = edgeMargin;
                     float maxBound = 1f - edgeMargin;
                     if (uvCandidate.x >= minBound && uvCandidate.x <= maxBound && 
@@ -306,7 +337,6 @@ public class Paint : MonoBehaviour
 
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
-            // Only accept hits on this GameObject to prevent painting on other objects
             if (hit.collider.gameObject != gameObject)
                 return false;
                 
@@ -314,7 +344,6 @@ public class Paint : MonoBehaviour
             if (uv == Vector2.zero)
                 uv = ComputeUVFromHit(hit);
             
-            // Check if UV is within valid bounds and outside edge margin
             float minBound = edgeMargin;
             float maxBound = 1f - edgeMargin;
             if (uv.x >= minBound && uv.x <= maxBound && uv.y >= minBound && uv.y <= maxBound)
@@ -331,7 +360,6 @@ public class Paint : MonoBehaviour
         if (CanvasGripManager.Instance.IsPaintBlockedByGrip(CanvasGripManager.ActiveHand.Right))
             return false;
 
-        // Verificar si T1 (gesto pinza índice-pulgar) está activo en mano derecha
         if (gestureController != null && gestureController.IsT1ActiveRight)
             return true;
 
@@ -349,9 +377,8 @@ public class Paint : MonoBehaviour
         {
             if (dev is UnityEngine.InputSystem.XR.XRController xr)
             {
-                // Use device index matching instead of unreliable name filtering
                 if (IsLeftHandDevice(xr))
-                    continue; // This is left hand, skip it
+                    continue; 
 
                 var trigger = xr.TryGetChildControl<AxisControl>("trigger");
                 if (trigger != null && trigger.ReadValue() > 0.1f)
@@ -396,7 +423,6 @@ public class Paint : MonoBehaviour
         if (CanvasGripManager.Instance.IsPaintBlockedByGrip(CanvasGripManager.ActiveHand.Left))
             return false;
 
-        // Verificar si T1 (gesto pinza índice-pulgar) está activo en mano izquierda
         if (gestureController != null && gestureController.IsT1ActiveLeft)
             return true;
 
@@ -405,9 +431,8 @@ public class Paint : MonoBehaviour
         {
             if (dev is UnityEngine.InputSystem.XR.XRController xr)
             {
-                // Use device index matching instead of unreliable name filtering
                 if (!IsLeftHandDevice(xr))
-                    continue; // This is right hand, skip it
+                    continue; 
 
                 var trigger = xr.TryGetChildControl<AxisControl>("trigger");
                 if (trigger != null && trigger.ReadValue() > 0.1f)
@@ -447,16 +472,11 @@ public class Paint : MonoBehaviour
         return false;
     }
 
-    // Backward compatibility wrapper - returns true if either hand is painting
     bool IsPainting()
     {
         return IsPaintingLeft() || IsPaintingRight();
     }
 
-    /// <summary>
-    /// Updates preview to show brush cursors for both hands simultaneously
-    /// Shows cursor even when not painting (based on raycast position)
-    /// </summary>
     void UpdatePreviewBothHands()
     {
         try
@@ -468,47 +488,16 @@ public class Paint : MonoBehaviour
             previewTex.SetPixels(runtimeTex.GetPixels());
         }
 
-        // Draw preview circle for left hand if it has a valid raycast position
         if (leftHandState.currentPx >= 0 && leftHandState.currentPy >= 0)
         {
             DrawPreviewCursor(previewTex, leftHandState.currentPx, leftHandState.currentPy, brushSize, leftHandState.currentTool);
         }
 
-        // Draw preview circle for right hand if it has a valid raycast position
         if (rightHandState.currentPx >= 0 && rightHandState.currentPy >= 0)
         {
             DrawPreviewCursor(previewTex, rightHandState.currentPx, rightHandState.currentPy, brushSize, rightHandState.currentTool);
         }
 
-        previewTex.Apply();
-        SetMaterialTexture(previewTex);
-
-        if (spriteRenderer != null && previewTex != null)
-        {
-            var orig = spriteRenderer.sprite;
-            if (orig != null)
-            {
-                Rect fullRect = new Rect(0, 0, previewTex.width, previewTex.height);
-                Vector2 pivotNorm = new Vector2(orig.pivot.x / orig.rect.width, orig.pivot.y / orig.rect.height);
-                var newSprite = Sprite.Create(previewTex, fullRect, pivotNorm, orig.pixelsPerUnit);
-                spriteRenderer.sprite = newSprite;
-            }
-        }
-    }
-
-    // Legacy method for backward compatibility
-    void UpdatePreview(int px, int py)
-    {
-        try
-        {
-            Graphics.CopyTexture(runtimeTex, previewTex);
-        }
-        catch
-        {
-            previewTex.SetPixels(runtimeTex.GetPixels());
-        }
-
-        DrawPreviewCursor(previewTex, px, py, brushSize, ToolType.Pincel);
         previewTex.Apply();
         SetMaterialTexture(previewTex);
 
@@ -636,7 +625,6 @@ public class Paint : MonoBehaviour
                             break;
                         
                         case ToolType.Goma:
-                            // Restaura el color original en lugar de hacerlo transparente
                             outc = sourceTex != null ? sourceTex.GetPixel(x, y) : Color.clear;
                             break;
                         
@@ -648,9 +636,7 @@ public class Paint : MonoBehaviour
                             break;
                         
                         case ToolType.Acuarela:
-                            // Calcula qué tan lejos estamos del centro (0 es el centro, 1 es el borde)
                             float distanceRatio = Mathf.Sqrt(dx2 + dy * dy) / radius;
-                            // Efecto suave: más transparente hacia los bordes
                             float watercolorAlpha = Mathf.Lerp(0.05f, 0.01f, distanceRatio);
                             Color watercolorCol = new Color(col.r, col.g, col.b, watercolorAlpha);
                             outc = Color.Lerp(src, watercolorCol, watercolorCol.a);
@@ -712,31 +698,31 @@ public class Paint : MonoBehaviour
                 
                 if (distSq <= r2)
                 {
-                    float dist = Mathf.Sqrt(distSq) / radius; // de 0 a 1
+                    float dist = Mathf.Sqrt(distSq) / radius; 
                     bool drawPixel = false;
                     Color cursorColor = Color.yellow;
 
                     switch (tool)
                     {
-                        case ToolType.Pincel: // Círculo amarillo sólido semi-transparente
+                        case ToolType.Pincel: 
                             cursorColor.a = 0.5f;
                             drawPixel = true;
                             break;
                             
-                        case ToolType.Goma: // Solo dibuja el contorno (un anillo)
+                        case ToolType.Goma: 
                             if (dist > 0.8f) { cursorColor.a = 0.8f; drawPixel = true; }
                             break;
                             
-                        case ToolType.Graffiti: // Puntos dispersos para simular el área del spray
+                        case ToolType.Graffiti: 
                             if (Random.value < 0.1f) { cursorColor.a = 0.8f; drawPixel = true; }
                             break;
                             
-                        case ToolType.Acuarela: // Círculo muy difuminado
+                        case ToolType.Acuarela: 
                             cursorColor.a = Mathf.Lerp(0.3f, 0.0f, dist);
                             drawPixel = true;
                             break;
                             
-                        case ToolType.Mano: // No hay cursor visible
+                        case ToolType.Mano: 
                             drawPixel = false;
                             break;
                     }
@@ -755,7 +741,6 @@ public class Paint : MonoBehaviour
     {
         globalCurrentTool = newTool;
 
-        // Apply to all existing Paint instances so they inherit the change immediately
         Paint[] allPaints = FindObjectsOfType<Paint>();
         foreach (var p in allPaints)
         {

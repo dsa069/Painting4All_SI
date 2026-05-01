@@ -822,7 +822,6 @@ public class Menu : MonoBehaviour
 
 	private bool PositionMenuAboveOpeningController()
 	{
-		// 1. Identificamos cuál de los dos menús permitidos debemos mover
 		GameObject menuToMove = null;
 		
 		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
@@ -838,7 +837,6 @@ public class Menu : MonoBehaviour
 			menuToMove = menuColorGrosorInstance;
 		}
 
-		// Si no hay ninguno de los dos activo (por ejemplo, si estamos en Menu_Entornos), cancelamos
 		if (menuToMove == null)
 		{
 			return false;
@@ -855,7 +853,6 @@ public class Menu : MonoBehaviour
 			return false;
 		}
 
-		// 2. Aplicamos la posición y rotación al menú seleccionado
 		Transform menuTransform = menuToMove.transform;
 		Vector3 targetPosition = controllerPosition + Vector3.up * menuHeightAboveController;
 
