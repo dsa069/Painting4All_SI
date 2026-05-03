@@ -22,6 +22,10 @@ public class Menu : MonoBehaviour
 	[SerializeField]
 	private GameObject menuHerramientasPrefab;
 
+	[Header("Color Grosor Menu Reference")]
+	[SerializeField]
+	private GameObject menuColorGrosorPrefab;
+
 	[SerializeField]
 	private bool hideMenuOnStart = true;
 
@@ -29,6 +33,7 @@ public class Menu : MonoBehaviour
 	private GameObject menuGeneralInstance;
 	private GameObject menuEntornoInstance;
 	private GameObject menuHerramientasInstance;
+	private GameObject menuColorGrosorInstance;
 
 	public GameObject ActiveMenuInstance
 	{
@@ -41,6 +46,8 @@ public class Menu : MonoBehaviour
 				return menuEntornoInstance;
 			if (menuHerramientasInstance != null && menuHerramientasInstance.activeSelf)
 				return menuHerramientasInstance;
+			if (menuColorGrosorInstance != null && menuColorGrosorInstance.activeSelf)
+				return menuColorGrosorInstance;
 			return null;
 		}
 	}
@@ -213,6 +220,55 @@ public class Menu : MonoBehaviour
 		}
 	}
 
+	public void OpenColorGrosorMenu(Vector3 position, Quaternion rotation)
+	{
+		if (menuGeneralInstance != null)
+		{
+			menuGeneralInstance.SetActive(false);
+		}
+
+		if (menuColorGrosorInstance != null)
+		{
+			Destroy(menuColorGrosorInstance);
+		}
+
+		if (menuColorGrosorPrefab == null)
+		{
+			menuColorGrosorPrefab = Resources.Load<GameObject>("Prefabs/Menu_Color_Grosor");
+		}
+
+		if (menuColorGrosorPrefab == null)
+		{
+			Debug.LogWarning("Menu: no se pudo cargar Menu_Color_Grosor prefab.");
+			return;
+		}
+
+		menuColorGrosorInstance = Instantiate(menuColorGrosorPrefab);
+		menuColorGrosorInstance.name = "Menu_Color_Grosor";
+
+		Vector3 menuScale = menuGeneralInstance != null
+			? menuGeneralInstance.transform.localScale
+			: instantiatedMenuScale;
+		menuColorGrosorInstance.transform.localScale = menuScale;
+
+		menuColorGrosorInstance.transform.position = position;
+		menuColorGrosorInstance.transform.rotation = rotation;
+		menuColorGrosorInstance.SetActive(true);
+		menuColorGrosorInstance.AddComponent<MenuColorGrosorButtonHandler>();
+
+		Debug.Log("Menu: Menu_Color_Grosor abierto.");
+	}
+
+	public void CloseColorGrosorMenu()
+	{
+		if (menuColorGrosorInstance != null)
+		{
+			Destroy(menuColorGrosorInstance);
+			menuColorGrosorInstance = null;
+			Debug.Log("Menu: Menu_Color_Grosor cerrado.");
+		}
+	}
+
 	private void Update()
     {
         // 1. Detectar inputs de los controladores de Meta (Botones X y A)
@@ -243,6 +299,7 @@ public class Menu : MonoBehaviour
 
 		bool isGeneralActive = menuGeneral != null && menuGeneralInstance.activeSelf;
 		bool isHerramientasActive = menuHerramientasInstance != null && menuHerramientasInstance.activeSelf;
+		bool isColorGrosorActive = menuColorGrosorInstance != null && menuColorGrosorInstance.activeSelf;
 
         if (isGeneralActive || isHerramientasActive)
         {
@@ -478,6 +535,7 @@ public class Menu : MonoBehaviour
 
 		CloseEntornoMenu();
 		CloseHerramientasMenu();
+		CloseColorGrosorMenu();
 
 		if (menuGeneralInstance != null &&
 			menuGeneralInstance.activeSelf &&
@@ -765,7 +823,6 @@ public class Menu : MonoBehaviour
 
 	private bool PositionMenuAboveOpeningController()
 	{
-		// 1. Identificamos cuál de los dos menús permitidos debemos mover
 		GameObject menuToMove = null;
 		
 		if (menuGeneralInstance != null && menuGeneralInstance.activeSelf)
@@ -777,7 +834,6 @@ public class Menu : MonoBehaviour
 			menuToMove = menuHerramientasInstance;
 		}
 
-		// Si no hay ninguno de los dos activo (por ejemplo, si estamos en Menu_Entornos), cancelamos
 		if (menuToMove == null)
 		{
 			return false;
@@ -794,7 +850,6 @@ public class Menu : MonoBehaviour
 			return false;
 		}
 
-		// 2. Aplicamos la posición y rotación al menú seleccionado
 		Transform menuTransform = menuToMove.transform;
 		Vector3 targetPosition = controllerPosition + Vector3.up * menuHeightAboveController;
 
