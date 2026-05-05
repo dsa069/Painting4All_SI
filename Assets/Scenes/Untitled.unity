@@ -23672,6 +23672,7 @@ GameObject:
   - component: {fileID: 1470592334}
   - component: {fileID: 1470592333}
   - component: {fileID: 1470592332}
+  - component: {fileID: 1470592335}
   m_Layer: 0
   m_Name: '[BuildingBlock] EffectMesh'
   m_TagString: Untagged
@@ -23694,7 +23695,7 @@ MonoBehaviour:
   SpawnOnStart: 1
   MeshMaterial: {fileID: 2100000, guid: e597e3d831d0dc642b2fab323b0a9d84, type: 2}
   BarycentricCoordinatesEnabled: 0
-  Colliders: 0
+  Colliders: 1
   CutHoles: 0
   castShadows: 1
   hideMesh: 0
@@ -23739,6 +23740,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1470592335
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1470592331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2f912e419d2fa74f8e4f5df3d01cb6c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EffectMeshPaint
+  paintableMaterial: {fileID: 2100000, guid: e597e3d831d0dc642b2fab323b0a9d84, type: 2}
+  textureResolution: 512
+  rayOrigin: {fileID: 0}
+  previewEnabled: 1
+  pixelEdgeMargin: 2
 --- !u!1 &1474844224
 GameObject:
   m_ObjectHideFlags: 0
@@ -33075,6 +33093,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fondo_lienzo
       objectReference: {fileID: 0}
+    - target: {fileID: 6650264935328043527, guid: 5197ba268bf9d1e429d382d3f52a1101, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7231068233820141886, guid: 5197ba268bf9d1e429d382d3f52a1101, type: 3}
       propertyPath: m_LocalPosition.x
       value: -9999
@@ -33137,11 +33159,11 @@ SceneRoots:
   - {fileID: 183006397}
   - {fileID: 1139916470}
   - {fileID: 1470592334}
-  - {fileID: 179860473}
-  - {fileID: 1578238434}
-  - {fileID: 637927901}
-  - {fileID: 398368743}
-  - {fileID: 48443167}
-  - {fileID: 1037212704}
   - {fileID: 148154303}
+  - {fileID: 1037212704}
+  - {fileID: 1578238434}
+  - {fileID: 398368743}
   - {fileID: 1285191969}
+  - {fileID: 48443167}
+  - {fileID: 179860473}
+  - {fileID: 637927901}

@@ -37,6 +37,7 @@ public struct HandPaintState
     public int currentPy;       // Current raycast position (for preview cursor)
     public bool isPainting;
     public ToolType currentTool;
+    public MeshRenderer lastHitRenderer;
 }
 
 public class Paint : MonoBehaviour
