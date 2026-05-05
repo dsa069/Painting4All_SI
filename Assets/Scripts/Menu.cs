@@ -271,6 +271,12 @@ public class Menu : MonoBehaviour
 
 	private void Update()
     {
+		if (MenuCalibrar.Instance != null && MenuCalibrar.Instance.IsCalibrating)
+		{
+			menuGeneralInstance.SetActive(false);
+			return;
+		}
+
         // 1. Detectar inputs de los controladores de Meta (Botones X y A)
         bool xPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch); // Mano Izquierda (X)
         bool aPressed = OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch); // Mano Derecha (A)

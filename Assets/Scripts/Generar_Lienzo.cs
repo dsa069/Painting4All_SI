@@ -76,6 +76,8 @@ public class Generar_Lienzo : MonoBehaviour
 
     private void Update()
     {
+        if (MenuCalibrar.Instance != null && MenuCalibrar.Instance.IsCalibrating) return;
+
         bool actionLeftTriggered = false;
         bool actionRightTriggered = false;
 
