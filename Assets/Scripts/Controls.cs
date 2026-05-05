@@ -298,7 +298,9 @@ public class GestureUIController : MonoBehaviour
         float indexStrength = hand.GetFingerPinchStrength(HandFinger.Index);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return indexStrength > 0.60f && thumbStrength > thumbMinimumStrength;
+        // Multiplicamos el valor base por la calibración (si no hay, CalibT1 es 0, así que usamos un fallback)
+        float threshold = 0.60f * (MenuCalibrar.Instance != null && MenuCalibrar.Instance.CalibT1 > 0 ? MenuCalibrar.Instance.CalibT1 : 1f);
+        return indexStrength > threshold && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -312,7 +314,8 @@ public class GestureUIController : MonoBehaviour
         float middleStrength = hand.GetFingerPinchStrength(HandFinger.Middle);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return middleStrength > 0.5f && thumbStrength > thumbMinimumStrength;
+        float threshold = 0.5f * (MenuCalibrar.Instance != null && MenuCalibrar.Instance.CalibT2 > 0 ? MenuCalibrar.Instance.CalibT2 : 1f);
+        return middleStrength > threshold && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -326,7 +329,8 @@ public class GestureUIController : MonoBehaviour
         float ringStrength = hand.GetFingerPinchStrength(HandFinger.Ring);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return ringStrength > 0.40f && thumbStrength > thumbMinimumStrength;
+        float threshold = 0.40f * (MenuCalibrar.Instance != null && MenuCalibrar.Instance.CalibB1 > 0 ? MenuCalibrar.Instance.CalibB1 : 1f);
+        return ringStrength > threshold && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>
@@ -340,7 +344,8 @@ public class GestureUIController : MonoBehaviour
         float pinkyStrength = hand.GetFingerPinchStrength(HandFinger.Pinky);
         float thumbStrength = hand.GetFingerPinchStrength(HandFinger.Thumb);
 
-        return pinkyStrength > 0.30f && thumbStrength > thumbMinimumStrength;
+        float threshold = 0.30f * (MenuCalibrar.Instance != null && MenuCalibrar.Instance.CalibB2 > 0 ? MenuCalibrar.Instance.CalibB2 : 1f);
+        return pinkyStrength > threshold && thumbStrength > thumbMinimumStrength;
     }
 
     /// <summary>

@@ -61,9 +61,10 @@ public class MenuButtonHandler : MonoBehaviour
 
 				break;
 			case 3:
-				Debug.Log("Has pulsado el boton de Mano");
-				// TODO: Implementar logica aqui
-
+				Debug.Log("Has pulsado el boton de Calibrar");
+				if (MenuCalibrar.Instance != null) {
+					MenuCalibrar.Instance.IniciarCalibracion();
+				}
 				break;
 			case 4:
 				Debug.Log("Has pulsado el boton de Salir");
